@@ -1,0 +1,7 @@
+{
+  "source_url": "https://arxiv.org/html/1706.03762v7",
+  "paper_title": "Attention Is All You Need",
+  "focus": "scaled dot-product attention",
+  "audience": "engineering undergraduate",
+  "excerpt": "Teaching paraphrase of Section 3.2.1 (Vaswani et al.). Queries and keys each have dimension d_k. Matching a query against each key yields dot-product scores. Divide the scores by sqrt(d_k), then apply softmax across the keys. These weights combine the value vectors into an output. In matrix form, Attention(Q,K,V) = softmax(Q K^T / sqrt(d_k)) V. Scaling mitigates very large dot products, which can place softmax in regions with small gradients. For learning, use small editable matrices and optionally compare scaling on/off; these toy inputs do not reproduce the paper experiments. A uniform score row gives uniform weights, and a relatively large score focuses its row on the corresponding value."
+}
