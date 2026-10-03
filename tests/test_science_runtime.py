@@ -268,6 +268,28 @@ class ComputationTests(unittest.TestCase):
         python_types = {k: {'dtype': v.dtype, 'shape': list(v.shape)} for k, v in validate_types_shapes(s).items()}
         self.assertEqual(js([{'mode': 'types', 'spec': s.model_dump()}])[0]['value'], python_types)
 
+    def test_slice_accepts_integral_float_indices(self):
+        expression = expr('slice', [1, 2, 3, 4], params={'start': 1.0, 'stop': -1.0})
+        self.assertEqual(evaluate_expression(expression), [2, 3])
+        with self.assertRaises(ComputationError):
+            evaluate_expression(expr('slice', [1, 2, 3, 4], params={'start': 1.5}))
+        s = fixture('entropy')
+        s['controls'][1] = {'id': 'num_outcomes', 'type': 'slider', 'label': 'Outcomes', 'value_kind': 'scalar',
+                            'default': 3, 'min': 2, 'max': 4, 'step': 1}
+        self.assertEqual(evaluate(s, {'num_outcomes': 2.0})['entropy'], 1)
+        self.assertTrue(validate_spec(s, source_for(s)).ok)
+
+    @unittest.skipUnless(shutil.which('node'), 'Development-only Node harness')
+    def test_reductions_match_javascript_exactly(self):
+        # Summation order is identical; exp/log may still differ by an ulp between numpy and V8.
+        cases = [expr('sum', [0.1] * 10), expr('mean', [[0.1, 0.2, 0.3], [0.7, 0.1, 0.2]], params={'axis': 1}),
+                 expr('normalize', [0.1] * 10),
+                 expr('product', [[1.1, 1.3], [1.7, 1.9]], params={'axis': 0}),
+                 expr('slice', [1, 2, 3, 4], params={'start': 1.0, 'stop': 3.0})]
+        for expression, answer in zip(cases, js([{'expression': e} for e in cases])):
+            with self.subTest(expression=expression):
+                self.assertEqual(answer['value'], evaluate_expression(expression))
+
 
 class ValidationTests(unittest.TestCase):
     def test_supplied_fixtures_validate(self):
@@ -334,6 +356,33 @@ class ValidationTests(unittest.TestCase):
         self.assertTrue(result.rubric_summary['visual']['requires_fallback'])
         s['visuals'][0]['value'] = 'missing'
         self.assertFalse(validate_spec(s, source_for(s)).ok)
+
+    def test_schema_errors_use_ir_paths(self):
+        s = fixture()
+        s['computation']['nodes'][0]['inputs'][0] = {'ref': 'prior', 'bogus': 1}
+        failures = validate_spec(s).failures
+        self.assertEqual([(f.path, f.allowed_paths) for f in failures],
+                         [('computation.nodes.0.inputs.0.bogus', ['computation.nodes.0.inputs.0.bogus'])])
+
+    def test_repair_paths_and_rubric_keys(self):
+        s = fixture()
+        s['controls'].append({**s['controls'][0], 'id': 'unused'})
+        result = validate_spec(s, source_for(s))
+        failure = next(f for f in result.failures if f.check == 'control_visible_influence')
+        self.assertEqual(failure.allowed_paths, ['controls.2', 'computation.outputs', 'computation.nodes', 'visuals'])
+        self.assertTrue(result.rubric_summary['visual']['meaningful_non_table_visual'])
+
+    def test_derive_playground_keeps_usable_candidates(self):
+        s = fixture()
+        s['visuals'][0]['value'] = 'missing'
+        result = validate_spec(s, source_for(s))
+        self.assertFalse(result.ok)
+        derived = derive_playground(s, validation=result)
+        self.assertNotIn('missing', derived.visible_nodes)
+        self.assertAlmostEqual(derived.evaluated_defaults['posterior'], .5625)
+        s['controls'][0]['default'] = 1
+        with self.assertRaises(ComputationError):
+            derive_playground(s, source_for(s))
 
     def test_trace_callback_and_case_extra_fields(self):
         events = []

@@ -95,7 +95,7 @@
         },
         "inputs": {
           "items": {
-            "anyOf": [
+            "oneOf": [
               {
                 "$ref": "#/$defs/Reference"
               },
@@ -510,7 +510,7 @@
         },
         "inputs": {
           "items": {
-            "anyOf": [
+            "oneOf": [
               {
                 "$ref": "#/$defs/Reference"
               },

@@ -363,7 +363,8 @@
   function evaluate(spec, inputs = {}) {
     const g=graph(spec),values=Object.create(null);
     validateTypesShapes(spec);
-    if(Object.keys(inputs).some(k=>!g.controls.has(k)))fail('Unknown input control');
+    const unknown=Object.keys(inputs).filter(k=>!g.controls.has(k)).sort();
+    if(unknown.length)fail('Unknown input controls: '+unknown.join(', '));
     spec.controls.forEach(c=>{const v=own(inputs,c.id)?inputs[c.id]:c.default;validateControl(c,v);values[c.id]=v;});
     const expr=engine();
     g.order.forEach(id=>{const n=g.nodes.get(id),v=finite(expr(n,values)),t=typeOf(v);

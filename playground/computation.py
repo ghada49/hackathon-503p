@@ -97,6 +97,24 @@ def _integer(value: Any, label: str) -> int:
     return int(a)
 
 
+def _slice_bounds(p: dict) -> tuple[int | None, int | None, int | None]:
+    # Integral floats (2.0 from sliders or computed nodes) are valid indices, as in JS.
+    return tuple(None if p.get(key) is None else _integer(p[key], f'slice {key}') for key in ('start', 'stop', 'step'))
+
+
+def _seq_reduce(ufunc: np.ufunc, a: np.ndarray, axis: int | None = None, keepdims: bool = False) -> np.ndarray:
+    """Left-to-right reduction, matching the JS reduce bit-for-bit (numpy sum is pairwise)."""
+    if axis is None:
+        total = ufunc.accumulate(a.reshape(-1))[-1]
+        return np.reshape(total, (1,) * a.ndim) if keepdims else total
+    total = np.take(ufunc.accumulate(a, axis=axis), -1, axis=axis)
+    return np.expand_dims(total, axis) if keepdims else total
+
+
+def _seq_sum(a: np.ndarray, axis: int | None = None, keepdims: bool = False) -> np.ndarray:
+    return _seq_reduce(np.add, a, axis, keepdims)
+
+
 def value_type(value: Any) -> dict[str, Any]:
     a = _array(value)
     kind = 'matrix' if a.ndim == 2 else 'vector' if a.ndim == 1 else 'boolean' if a.dtype.kind == 'b' else 'categorical' if a.dtype.kind in 'US' else 'scalar'
@@ -380,7 +398,10 @@ def _infer_expression(expression: Any, types: dict[str, TypeShape], depth=0) -> 
         n = args[0].shape[0]
         length = None
         if n is not None and 'end_ref' not in p:
-            start, stop, step = slice(p.get('start'), p.get('stop'), p.get('step')).indices(n)
+            start, stop, step = _slice_bounds(p)
+            if step == 0:
+                raise ComputationError('slice step cannot be zero')
+            start, stop, step = slice(start, stop, step).indices(n)
             length = len(range(start, stop, step))
         return TypeShape(args[0].dtype, (length, *args[0].shape[1:]))
     if op == 'concat':
@@ -595,12 +616,10 @@ class Evaluator:
         if op == 'slice':
             if a.ndim == 0:
                 raise ComputationError('slice requires an array')
-            for key in ('start', 'stop', 'step'):
-                if key in p:
-                    _integer(p[key], key)
-            if p.get('step') == 0:
+            start, stop, step = _slice_bounds(p)
+            if step == 0:
                 raise ComputationError('slice step cannot be zero')
-            return a[slice(p.get('start'), p.get('stop'), p.get('step'))]
+            return a[slice(start, stop, step)]
         if op == 'flatten':
             return a.reshape(-1)
         if op == 'reshape':
@@ -612,7 +631,9 @@ class Evaluator:
         if a.size == 0:
             raise ComputationError(f'{op}: empty input')
         axis = self._axis(p, a, default=None)
-        reductions = {'sum': np.sum, 'product': np.prod, 'mean': np.mean, 'min': np.min, 'max': np.max,
+        n = a.size if axis is None else a.shape[axis]
+        reductions = {'sum': _seq_sum, 'product': lambda x, axis: _seq_reduce(np.multiply, x, axis),
+                      'mean': lambda x, axis: _seq_sum(x, axis) / n, 'min': np.min, 'max': np.max,
                       'argmin': np.argmin, 'argmax': np.argmax}
         if op in reductions:
             return reductions[op](a, axis=axis)
@@ -626,9 +647,9 @@ class Evaluator:
             axis = 1
         if op in {'softmax', 'softmax_rows'}:
             exps = np.exp(a - np.max(a, axis=axis, keepdims=True))
-            return exps / np.sum(exps, axis=axis, keepdims=True)
+            return exps / _seq_sum(exps, axis=axis, keepdims=True)
         if op == 'normalize':
-            total = np.sum(a, axis=axis, keepdims=True)
+            total = _seq_sum(a, axis=axis, keepdims=True)
             if np.any(total == 0):
                 raise ComputationError('Cannot normalize zero-total input')
             return a / total
@@ -651,7 +672,7 @@ def evaluate(spec: PaperMechanismIR | dict, inputs: Mapping[str, Any] | None = N
     if len(controls) != len(spec.controls):
         raise ComputationError('Duplicate control IDs')
     if set(inputs or {}) - set(controls):
-        raise ComputationError('Unknown input control')
+        raise ComputationError(f'Unknown input controls: {sorted(set(inputs or {}) - set(controls))}')
     values = {c.id: (inputs or {}).get(c.id, c.default) for c in spec.controls}
     for name, c in controls.items():
         validate_control_value(c, values[name])

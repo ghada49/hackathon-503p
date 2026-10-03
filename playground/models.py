@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 import math
-from typing import Any, Literal, Union
+from typing import Annotated, Any, Literal, Union
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (AliasChoices, BaseModel, ConfigDict, Discriminator, Field, Tag, field_validator,
+                      model_validator)
 
 ValueKind = Literal['scalar', 'vector', 'matrix', 'sequence', 'boolean', 'categorical']
 ControlType = Literal['slider', 'number', 'checkbox', 'select', 'vector_editor', 'matrix_editor', 'sequence_editor']
@@ -130,9 +131,27 @@ class Constant(Contract):
     _literal = field_validator('const')(check_literal)
 
 
+def operand_tag(value: Any) -> str | None:
+    """Pick the operand form by its key so schema errors name one real IR path."""
+    if isinstance(value, BaseModel):
+        value = value.model_dump()
+    if not isinstance(value, dict):
+        return None
+    return next((key for key in ('op', 'ref', 'const') if key in value), None)
+
+
+OPERAND_TAGS = ('op', 'ref', 'const')
+
+Operand = Annotated[
+    Union[Annotated[Reference, Tag('ref')], Annotated[Constant, Tag('const')], Annotated['Expression', Tag('op')]],
+    Discriminator(operand_tag, custom_error_type='invalid_operand',
+                  custom_error_message='Operand must be {"ref": id}, {"const": value}, or {"op": name, "inputs": [...]}'),
+]
+
+
 class Expression(Contract):
     op: str = Field(min_length=1)
-    inputs: list[Union[Reference, Constant, 'Expression']] = Field(max_length=100)
+    inputs: list[Operand] = Field(max_length=100)
     params: dict[str, Any] = Field(default_factory=dict)
 
 

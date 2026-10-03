@@ -9,11 +9,27 @@ from pydantic import ValidationError
 
 from .computation import ComputationError, derive_dependencies, evaluate, graph_order, validate_control_value
 from .models import (AssertionSpec, ControlSpec, DerivedPlayground, ExpectationSpec,
-                     PaperMechanismIR, SourceBlock, ValidationFailure, ValidationResult)
+                     OPERAND_TAGS, PaperMechanismIR, SourceBlock, ValidationFailure, ValidationResult)
 
 VISUAL_TYPES = {'formula', 'number', 'table', 'matrix', 'heatmap', 'bar_chart', 'line_chart',
                 'scatter', 'vector', 'pipeline', 'nodes_edges', 'scene'}
 NON_TABLE = {'heatmap', 'bar_chart', 'line_chart', 'scatter', 'vector', 'pipeline', 'nodes_edges', 'scene'}
+# IR subtrees a repair may also need beyond the failing path, e.g. a control nothing visible
+# depends on is usually fixed by displaying a node or binding a visual, not by editing the control.
+REPAIR_PATHS = {
+    'computation': ['controls'],
+    'control_count': ['computation', 'visuals', 'explorations'],
+    'control_influence': ['computation'],
+    'control_visible_influence': ['computation.outputs', 'computation.nodes', 'visuals'],
+    'control_boundary': ['computation'],
+}
+
+
+def ir_path(loc: tuple) -> str:
+    """Drop pydantic operand-union tags so the path addresses the IR itself."""
+    parts = [part for i, part in enumerate(loc)
+             if not (part in OPERAND_TAGS and 0 < i < len(loc) - 1 and isinstance(loc[i - 1], int))]
+    return '.'.join(map(str, parts))
 
 
 def visible_nodes(spec: PaperMechanismIR) -> set[str]:
@@ -150,8 +166,9 @@ def validate_spec(spec: PaperMechanismIR | dict, source_blocks: Iterable[SourceB
 
     def issue(check, path, message, severity='serious'):
         repairable = severity == 'serious'
+        allowed = ([path] if path else []) + [p for p in REPAIR_PATHS.get(check, []) if p != path]
         item = ValidationFailure(check=check, severity=severity, path=path, message=message,
-                                 repairable=repairable, allowed_paths=[path] if repairable and path else [])
+                                 repairable=repairable, allowed_paths=allowed if repairable else [])
         (warnings if severity in {'warning', 'recoverable'} else failures).append(item)
         record(check, False, {'path': path, 'message': message, 'severity': severity})
 
@@ -163,7 +180,7 @@ def validate_spec(spec: PaperMechanismIR | dict, source_blocks: Iterable[SourceB
         spec = PaperMechanismIR.model_validate(spec.model_dump() if isinstance(spec, PaperMechanismIR) else spec)
     except ValidationError as exc:
         for error in exc.errors(include_input=False, include_context=False):
-            issue('schema', '.'.join(map(str, error['loc'])), error['msg'])
+            issue('schema', ir_path(error['loc']), error['msg'])
         return result()
     record('schema', True)
     if len({c.id for c in spec.controls}) != len(spec.controls):
@@ -234,8 +251,9 @@ def validate_spec(spec: PaperMechanismIR | dict, source_blocks: Iterable[SourceB
     meaningful = any(v.type in NON_TABLE for v in spec.visuals)
     if not meaningful:
         issue('visual_fallback', 'visuals', 'Renderer must add a computation/dependency diagram; table/number/formula alone is insufficient', 'recoverable')
-    summary['visual'].update(bindings_valid=visual_ok, requested_non_table_visual=meaningful,
-                              requires_fallback=not meaningful or any(v.type not in VISUAL_TYPES for v in spec.visuals))
+    summary['visual'].update(meaningful_non_table_visual=meaningful, bindings_valid=visual_ok,
+                             requested_non_table_visual=meaningful,
+                             requires_fallback=not meaningful or any(v.type not in VISUAL_TYPES for v in spec.visuals))
     visible = visible_nodes(spec) & known
     # An echoed control alone does not establish a working computed mechanism.
     visible_computed = visible & node_ids
@@ -318,10 +336,18 @@ def validate_spec(spec: PaperMechanismIR | dict, source_blocks: Iterable[SourceB
     return result()
 
 
-def derive_playground(spec: PaperMechanismIR | dict, source_blocks=None) -> DerivedPlayground:
+def derive_playground(spec: PaperMechanismIR | dict, source_blocks=None,
+                      validation: ValidationResult | None = None) -> DerivedPlayground:
+    """Build the playground for any candidate whose computation executes.
+
+    Remaining serious failures (a bad visual binding, a weak exploration) do not block it:
+    best-so-far needs a renderable candidate even when repair budget runs out. Pass the
+    ValidationResult you already have to avoid validating twice; check its `ok` to rank candidates.
+    """
     spec = spec if isinstance(spec, PaperMechanismIR) else PaperMechanismIR.model_validate(spec)
-    validation = validate_spec(spec, source_blocks)
-    if not validation.ok:
-        raise ComputationError('; '.join(f.message for f in validation.failures))
-    return DerivedPlayground(spec=spec, dependency_graph=derive_dependencies(spec), evaluated_defaults=evaluate(spec),
-                             visible_nodes=visible_nodes(spec), rubric_summary=validation.rubric_summary)
+    validation = validation or validate_spec(spec, source_blocks)
+    if not validation.rubric_summary.get('scientific', {}).get('computation_executes'):
+        raise ComputationError('; '.join(f.message for f in validation.failures) or 'Computation does not execute')
+    values = evaluate(spec)
+    return DerivedPlayground(spec=spec, dependency_graph=derive_dependencies(spec), evaluated_defaults=values,
+                             visible_nodes=visible_nodes(spec) & set(values), rubric_summary=validation.rubric_summary)

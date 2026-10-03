@@ -13,16 +13,19 @@ from playground.validation import validate_spec, derive_playground
 spec = PaperMechanismIR.model_validate_json(model_response_json)
 report = validate_spec(spec, source_blocks=focused_evidence.blocks,
                        trace=trace_logger.event)
-if report.ok:
-    derived = derive_playground(spec, focused_evidence.blocks)
-else:
+derived = derive_playground(spec, validation=report)  # raises only if computation fails
+if not report.ok:
     failures = [failure.model_dump() for failure in report.failures]
-    # Orchestrator decides whether to request its one permitted repair.
+    # Orchestrator decides whether to request its one permitted repair,
+    # keeping `derived` as best-so-far if the repair is not better.
 ```
 
 The optional trace callback receives positional `(stage, action, result)` arguments.
 Adapt it if the logger has a different signature. Every event records a performed
-check. `ValidationFailure.allowed_paths` identifies affected IR subtrees; the
+check. `ValidationFailure.path` is a real IR path (schema errors name the one bad
+operand, without pydantic union tags). `allowed_paths` lists the failing path plus
+subtrees a repair commonly needs; for example, a control with no visible effect also
+allows `computation.outputs`, `computation.nodes`, and `visuals`. The
 orchestrator's restricted patcher must still protect unrelated fields and apply
 updates transactionally. This module never applies model patches.
 
@@ -53,7 +56,7 @@ from playground.validation import derive_playground
 values = evaluate(spec)                    # dict of controls + all computed nodes
 updated = evaluate(spec, {"prior": 0.5})   # partial control overrides
 dependencies = derive_dependencies(spec)   # source ID -> transitive node IDs
-derived = derive_playground(spec, blocks)  # validated defaults + visible nodes
+derived = derive_playground(spec, blocks)  # defaults + visible nodes; raises only if computation fails
 ```
 
 Embed the **fixed** `runtime/computation.js` before your UI runtime. In the browser:
@@ -66,6 +69,9 @@ const dependencies = PaperComputation.deriveDependencies(spec);
 This interpreter has no DOM access. `runtime/playground-runtime.js` remains Person
 3's file. Bind UI elements to node/control IDs. Use `node.display` for intermediate
 cards. All final numbers come from `values`; no model-generated code is executed.
+`PaperComputation.evaluate` throws on invalid states the validator did not sample
+(for example, all active entropy weights set to zero). Catch it, keep the last valid
+values on screen, and show the error message near the control.
 `DerivedPlayground.resolved_visuals` starts empty for Person 3 to fill. Unknown
 visuals produce recoverable warnings; the renderer must add a meaningful
 dependency diagram plus supporting values. A science `report.ok` does not imply
@@ -107,7 +113,7 @@ finite JSON numbers, booleans, strings, and rectangular rank-one/two arrays.
 | `matmul` | Numeric matrices `[m,k]` and `[k,n]` -> `[m,n]`. |
 | `transpose` | Numeric matrix -> transposed matrix. |
 | `index` | Array and integer scalar -> first-axis element/row. Negative indices count from end; invalid indices fail. |
-| `slice` | Array; optional integer `start`, exclusive `stop`, `step`, or dynamic `end_ref`. Python-style negative indices and steps. Zero step fails. |
+| `slice` | Array; optional integer `start`, exclusive `stop`, `step`, or dynamic `end_ref`. Integral floats such as `2.0` are accepted; `2.5` fails. Python-style negative indices and steps. Zero step fails. |
 | `reshape` | Value + `params.shape` (positive rank-one/two dimensions); exact element count required. |
 | `flatten` | Value -> row-major vector. |
 | `concat` | 1–100 arrays, optional `axis` (default 0); nonconcatenated dimensions must match. Optional scalar promotion. |
@@ -141,6 +147,11 @@ after a slice controlled by outcome count). Concrete execution then checks each
 actual state and any declared shapes. For array booleans, kind remains vector or
 matrix, while abstract dtype is boolean. `infer_types_shapes()` returns concrete
 kind/shape information at defaults or the provided input state.
+
+Reductions (`sum`, `mean`, `product`, and the totals inside `normalize`/`softmax`)
+add left to right in both interpreters, so they agree bit-for-bit. `exp`, `log`,
+`dot`, and `matmul` can still differ by about one ulp between numpy and V8. Compare
+floats with `approx`, not `equal`, when the result feeds a branch.
 
 ## Validation and test commands
 
