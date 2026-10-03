@@ -97,12 +97,24 @@ def compile_scientific_spec(client, evidence, case, *, operations=None, max_prom
     """Generate once, use authoritative diagnostics, repair at most once, retain prior best."""
     original = None
     parse_failure = None
+    regenerated = False
     try:
         original = generate_spec(client, evidence, case, ir_model=PaperMechanismIR,
                                  operations=operations, max_prompt_chars=max_prompt_chars)
     except GenerationFailure as exc:
         parse_failure = exc
         original = exc.candidate
+        if original is None and exc.allowed_paths and any(f.get('check') == 'json_parse' for f in exc.failures):
+            regenerated = True
+            try:
+                original = generate_spec(client, evidence, case, ir_model=PaperMechanismIR,
+                    operations=operations, max_prompt_chars=max_prompt_chars, compact_regeneration=True)
+            except GenerationFailure as regeneration_failure:
+                original = regeneration_failure.candidate
+                parse_failure = regeneration_failure
+            except (OpenRouterError, BudgetExceeded) as regeneration_failure:
+                client.trace.log('generation', 'compact_regeneration_failed', dict(reason=str(regeneration_failure)))
+                return CompilationResult(None, None, None, False, True, str(regeneration_failure))
     try:
         resolved = resolve_candidate(original if original is not None else {}, evidence.blocks,
                                      trace=client.trace, budget=client.budget)
@@ -121,7 +133,9 @@ def compile_scientific_spec(client, evidence, case, *, operations=None, max_prom
 
     if resolved.accepted:
         client.trace.log('science', 'accepted', dict(validation_ok=True, frozen_sha=PERSON2_FROZEN_SHA))
-        return CompilationResult(best.spec, best.validation, best_derived, True, resolution=best_resolution)
+        return CompilationResult(best.spec, best.validation, best_derived, True, regenerated, resolution=best_resolution)
+    if regenerated:
+        return retained('Compact regeneration failed scientific/schema or rubric quality requirements', attempted=True)
     failures = [failure.model_dump(mode='json') for failure in assessment.validation.failures] + resolved.repair_requests
     allowed = sorted({path for failure in assessment.validation.failures if failure.repairable
                       for path in failure.allowed_paths})

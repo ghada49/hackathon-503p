@@ -164,10 +164,11 @@ def test_actual_generation_prompt_with_schema_and_registry_is_bounded():
     case = Case(source_url='paper', focus='stability', audience='students')
     schema = {'type': 'object', 'properties': {'schema_version': {'const': '1.0'}}}
     overhead = generation_prompt_overhead(case, schema)
+    limit = overhead + 2000
     context = select_source_context(sample_source(), case.focus, case.audience,
-                                    max_chars=7000, prompt_overhead_chars=overhead)
-    messages = build_generation_messages(case, context, schema, max_prompt_chars=7000)
-    assert sum(len(m['content']) for m in messages) <= 7000
+                                    max_chars=limit, prompt_overhead_chars=overhead)
+    messages = build_generation_messages(case, context, schema, max_prompt_chars=limit)
+    assert sum(len(m['content']) for m in messages) <= limit
 
 
 def test_unrelated_definition_does_not_displace_explicit_equation_reference():

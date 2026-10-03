@@ -1,5 +1,6 @@
 import copy
 import json
+import re
 
 import pytest
 
@@ -49,6 +50,8 @@ def test_generation_fits_naive_repair_overflows_compact_repair_fits(client, auth
     limit = sum(len(m['content']) for m in generation)
     candidate = authoritative_candidate
     candidate['teaching']['title'] = ''
+    # Keep the oversized-candidate scenario independent of prompt wording length.
+    candidate['teaching']['idea'] += ' Supporting context.' * (limit // 20)
     failures = [failure('teaching.title')]
     naive = json.dumps(dict(existing_ir=candidate, failures=failures,
         SOURCE_BLOCKS=[b.model_dump() for b in source.blocks], OUTPUT_SCHEMA=authoritative_model.model_json_schema()),
@@ -224,3 +227,23 @@ def test_exact_required_serialized_boundary(authoritative_model, authoritative_c
     with pytest.raises(GenerationFailure, match='context budget'):
         build_repair_context(authoritative_candidate, failures, ['schema_version'],
             ir_model=authoritative_model, max_prompt_chars=minimum - 1)
+
+
+def test_repeated_repair_field_schemas_are_stated_once():
+    from pathlib import Path
+    from playground.generator import _repair_schema
+    from playground.models import PaperMechanismIR
+    ir = json.loads((Path(__file__).parent / 'fixtures' / 'generic_ir.json').read_text())
+    nodes = [f'computation.nodes.{i}' for i in range(len(ir['computation']['nodes']))]
+    assert len(nodes) > 1
+    schema = PaperMechanismIR.model_json_schema()
+    result = _repair_schema(ir, nodes + ['schema_version'], schema)
+    refs = {result['fields'][path]['$ref'] for path in nodes}
+    assert len(refs) == 1
+    name = refs.pop().split('/')[-1]
+    # The shared definition is the exact per-path fragment, and nested references still resolve.
+    assert result['$defs'][name]['properties'].keys() >= {'id', 'op'}
+    serialized = json.dumps(result)
+    for reference in set(re.findall(r'#/\$defs/(\w+)', serialized)):
+        assert reference in result['$defs']
+    assert result['fields']['schema_version']['const'] == '1.0'

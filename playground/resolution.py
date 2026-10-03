@@ -117,7 +117,8 @@ def _criteria(assessment):
     minima = dict(executable=derived is not None, grounded=grounding,
         meaningful_controls=len(controls), valid_explorations=len(explorations), meaningful_visual=bool(plan['visuals']),
         explanation_present=spec is not None and bool(spec.teaching and spec.symbols and spec.limitation),
-        autonomous_checks_present=spec is not None and bool(spec.tests and spec.invariants), scientific_checks_pass=checks_ok)
+        autonomous_checks_present=any(c['check'] == 'graph_types_shapes_execution' and c['passed']
+                                      for c in report.checks), scientific_checks_pass=checks_ok)
     quality = dict(structural_only=True, core_and_teaching_preserved=True,
         distinct_controls=spec is not None and len({spec.controls[i].label for i in controls}) == len(controls),
         distinct_explorations=spec is not None and len({_exploration_identity(spec.explorations[i])
@@ -212,7 +213,6 @@ def resolve_assessment(assessment, source_blocks, *, assess, trace=None, budget=
                     if identity in seen:
                         paths.add(f'{root}.{i}.label' if root == 'controls' else f'{root}.{i}')
                     seen.add(identity)
-        paths.update(root for root in ('tests', 'invariants') if not getattr(assessment.spec, root))
         for path in sorted(paths):
             requests.append(dict(check='rubric_quality', severity='serious', path=path,
                 message='Restore distinct meaningful guided learning and required autonomous checks; preserve the focused mechanism.',

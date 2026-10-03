@@ -45,10 +45,20 @@ def test_prompt_explicit_operand_grammar_and_authoritative_registry(candidate):
 
 def test_prompt_smallest_rubric_complete_artifact_and_visible_control_influence(candidate):
     system = prompt(candidate)
-    for instruction in ['smallest artifact', '2–3 meaningful controls', '2–3 meaningful visuals',
-                        'exactly 2 guided explorations', '2–3 focused tests', '1–3 meaningful invariants',
-                        'not hard maximums', 'Every control must influence',
-                        'displayed value or meaningful visual', 'unnecessary controls']:
+    for instruction in ['smallest scientifically sufficient specification', '2–3 meaningful controls', '2–3 visuals',
+                        'EXACTLY 2 explorations', '<= 16 computation nodes', '<= 2 tests', '<= 2 invariants',
+                        'Tests and invariants are optional', 'Every control must influence',
+                        'displayed value or meaningful visual', 'experience = null']:
+        assert instruction in system
+
+
+def test_prompt_exact_ids_shape_and_numeric_tolerance_guidance(candidate):
+    system = prompt(candidate)
+    for instruction in ('EXACT existing ID', 'NEVER generate indexed or dotted pseudo-references',
+                        'weights[0,0]', 'x[2]', 'foo.bar', 'matrix.row1', 'result.value',
+                        'create a real computation node', 'OMIT the structured assertion',
+                        'no structured expectation', '1e-6', 'Never use tolerance=1.0',
+                        'omit them unless completely certain', 'cited block actually supports'):
         assert instruction in system
 
 

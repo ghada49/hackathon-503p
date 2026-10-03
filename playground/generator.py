@@ -24,6 +24,10 @@ CORE_OPERATIONS = tuple(OPERATIONS)
 CONTROL_TYPES = tuple('slider number checkbox select vector_editor matrix_editor sequence_editor'.split())
 VISUAL_TYPES = tuple('formula number table matrix heatmap bar_chart line_chart scatter vector pipeline nodes_edges scene'.split())
 SCENE_ELEMENTS = tuple('line arrow circle rect point polyline text axis group'.split())
+# Default reasoning effort is high on models such as deepseek-v4.1-flash; reasoning tokens share
+# max_tokens with visible output, so it is set explicitly (OpenRouter `reasoning.effort`).
+REASONING_EFFORT = 'low'
+GENERATION_MAX_TOKENS = 15000  # Two generation-sized calls fit MAX_COMPLETION_TOKENS_TOTAL.
 IR_FIELDS = tuple('schema_version teaching evidence provenance symbols controls computation mechanism_grounding visuals explorations limitation tests invariants'.split())
 
 
@@ -123,9 +127,35 @@ def generation_prompt_overhead(case, schema: dict, *, operations=None) -> int:
     return len(system) + len(_json(brief)) - 1
 
 
+_TRUNCATION_REASONS = {'length', 'max_tokens', 'max_output_tokens'}
+
+
+def response_diagnostics(choice, usage) -> dict:
+    """Allowlisted response metadata only: counts and reasons, never content or reasoning text."""
+    choice = choice if isinstance(choice, dict) else {}
+    message = choice.get('message') if isinstance(choice.get('message'), dict) else {}
+    content = message.get('content')
+    details = usage.get('completion_tokens_details') if isinstance(usage, dict) else None
+    reasoning = message.get('reasoning')
+    finish, native = choice.get('finish_reason'), choice.get('native_finish_reason')
+    if finish in _TRUNCATION_REASONS or native in _TRUNCATION_REASONS:
+        outcome = 'truncated'
+    elif not isinstance(content, str) or not content.strip():
+        outcome = 'empty'
+    else:
+        outcome = 'content'
+    return dict(outcome=outcome, finish_reason=finish if isinstance(finish, str) else None,
+                native_finish_reason=native if isinstance(native, str) else None,
+                content_type=type(content).__name__, content_chars=len(content) if isinstance(content, str) else 0,
+                reasoning_chars=len(reasoning) if isinstance(reasoning, str) else 0,
+                completion_tokens=usage.get('completion_tokens') if isinstance(usage, dict) else None,
+                reasoning_tokens=details.get('reasoning_tokens') if isinstance(details, dict) else None)
+
+
 class OpenRouterClient:
     def __init__(self, model: str, budget: BudgetManager, trace: TraceLogger, *,
-                 session=None, sleep=time.sleep, structured_output: bool = True):
+                 session=None, sleep=time.sleep, structured_output: bool = True,
+                 reasoning_effort: str | None = REASONING_EFFORT):
         if not model.strip():
             raise ValueError('A nonempty model ID is required')
         self.model = model
@@ -134,6 +164,7 @@ class OpenRouterClient:
         self.session = session or requests.Session()
         self.sleep = sleep
         self.structured_output = structured_output
+        self.reasoning_effort = reasoning_effort
 
     def complete(self, messages: list[dict], *, purpose: str, schema: dict | None = None,
                  max_tokens: int = 15000) -> str:
@@ -142,8 +173,10 @@ class OpenRouterClient:
             raise OpenRouterError('OPENROUTER_API_KEY is required in the environment')
         semantic = self.budget.start_semantic(purpose)
         payload = dict(model=self.model, messages=messages, temperature=0)
+        if self.reasoning_effort:
+            payload['reasoning'] = dict(effort=self.reasoning_effort)
         if schema and self.structured_output:
-            payload['response_format'] = dict(type='json_schema', json_schema=dict(name='PaperMechanismIR' if purpose == 'generation' else 'RepairPatch', strict=True, schema=schema))
+            payload['response_format'] = dict(type='json_schema', json_schema=dict(name='RepairPatch' if 'updates' in schema.get('properties', {}) else 'PaperMechanismIR', strict=True, schema=schema))
         self.trace.log(purpose, 'semantic_call', dict(semantic_call_number=semantic, model=self.model))
         for attempt in range(MAX_HTTP_ATTEMPTS_PER_SEMANTIC_CALL):
             payload['max_tokens'] = self.budget.completion_allowance(max_tokens)
@@ -196,17 +229,23 @@ class OpenRouterClient:
                     try:
                         choice = data['choices'][0]
                         content = choice['message']['content']
-                        if not isinstance(content, str):
-                            raise TypeError('Nontext content')
                     except (KeyError, IndexError, TypeError) as exc:
                         raise GenerationFailure('OpenRouter response contains no textual specification') from exc
+                    outcome = response_diagnostics(choice, usage)
+                    self.trace.log(purpose, 'response_diagnostics', dict(outcome, semantic_call_number=semantic,
+                        http_request_number=request_number, max_tokens=payload['max_tokens']))
+                    if outcome['outcome'] == 'truncated':
+                        # A cut-off response is never parsed or accepted, even if it happens to be valid JSON.
+                        raise GenerationFailure('Model response was truncated at the completion limit')
+                    if outcome['outcome'] == 'empty':
+                        raise GenerationFailure('OpenRouter response contains no textual specification')
                     return content
                 error = data.get('error', {})
                 error_message = str(error.get('message', '')) if isinstance(error, dict) else ''
                 # Adaptive retry only for explicit unsupported optional parameters, never auth/format blindly.
                 if status in (400, 422) and re.search(r'not supported|unsupported|does not support', error_message, re.I):
                     removed = []
-                    for option in ('response_format', 'temperature'):
+                    for option in ('response_format', 'temperature', 'reasoning'):
                         if option in payload and (option in error_message or option == 'response_format' and 'json_schema' in error_message):
                             payload.pop(option)
                             removed.append(option)
@@ -311,10 +350,21 @@ def validate_ir(candidate: dict, ir_model):
                                 failures=failures, allowed_paths=allowed) from exc
 
 
-def generate_spec(client: OpenRouterClient, evidence, case, *, ir_model=None, operations=None, max_prompt_chars: int | None = None):
+def generate_spec(client: OpenRouterClient, evidence, case, *, ir_model=None, operations=None,
+                  max_prompt_chars: int | None = None, compact_regeneration: bool = False):
     model = ir_model or shared_ir_model()
     schema = model.model_json_schema()
-    text = client.complete(build_generation_messages(case, evidence, schema, operations=operations, max_prompt_chars=max_prompt_chars), purpose='generation', schema=schema)
+    instruction = ('\nThe previous response was incomplete/unparseable. Regenerate the COMPLETE '
+                   'specification from scratch. Keep it compact and finish the JSON before adding '
+                   'optional detail.') if compact_regeneration else ''
+    messages = build_generation_messages(case, evidence, schema, operations=operations,
+        max_prompt_chars=None if max_prompt_chars is None else max_prompt_chars - len(instruction))
+    if instruction:
+        messages[0]['content'] += instruction
+        client.trace.log('generation', 'compact_regeneration', dict(previous_response_included=False))
+    # Fresh regeneration consumes the existing second semantic-call slot.
+    text = client.complete(messages, purpose='repair' if compact_regeneration else 'generation',
+                           schema=schema, max_tokens=GENERATION_MAX_TOKENS)
     try:
         candidate = extract_json(text)
         spec = validate_ir(candidate, model)
@@ -386,6 +436,21 @@ def _repair_schema(candidate: dict, allowed_paths: list[str], schema: dict) -> d
             raise GenerationFailure('Repair scope is not a real candidate/schema path', allowed_paths=[])
         fields[path] = compact(fragment)
     definitions = {}
+    # Sibling paths (e.g. many computation nodes) share one schema; state it once in $defs.
+    counts = {}
+    for fragment in fields.values():
+        key = _json(fragment)
+        counts[key] = counts.get(key, 0) + 1
+    shared = {}
+    for path, fragment in fields.items():
+        key = _json(fragment)
+        if counts[key] > 1 and '$ref' not in fragment:
+            if key not in shared:
+                shared[key] = f'RepairShared{len(shared) + 1}'
+                while shared[key] in schema.get('$defs', {}):
+                    shared[key] += '_'
+                definitions[shared[key]] = fragment
+            fields[path] = {'$ref': '#/$defs/' + shared[key]}
     def references(value):
         if isinstance(value, dict):
             if '$ref' in value:
@@ -405,6 +470,7 @@ def _repair_schema(candidate: dict, allowed_paths: list[str], schema: dict) -> d
             for child in value:
                 references(child)
     references(fields)
+    references([definitions[name] for name in shared.values()])
     return dict(fields=fields, **({'$defs': definitions} if definitions else {}))
 
 

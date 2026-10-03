@@ -224,3 +224,71 @@ def test_missing_environment_key_does_not_consume_intent(context, monkeypatch):
     with pytest.raises(OpenRouterError):
         generate_spec(client, evidence(), case(), ir_model=FakeIR)
     assert budget.semantic_calls == 0
+
+
+def diagnostic_response(content, finish='stop', native=None, reasoning_tokens=None):
+    usage = dict(prompt_tokens=20, completion_tokens=8000, total_tokens=8020)
+    if reasoning_tokens is not None:
+        usage['completion_tokens_details'] = dict(reasoning_tokens=reasoning_tokens)
+    data = dict(id='req-d', choices=[dict(message=dict(content=content, reasoning='private chain of thought'),
+                                          finish_reason=finish, native_finish_reason=native)], usage=usage)
+    return SimpleNamespace(status_code=200, headers={}, json=lambda: data)
+
+
+def trace_events(trace, action):
+    trace.flush()
+    lines = open(trace._file.name, encoding='utf-8').read().splitlines()
+    return [json.loads(line)['result'] for line in lines if json.loads(line)['action'] == action]
+
+
+def test_response_diagnostics_are_counts_only_and_reasoning_is_bounded(context):
+    budget, trace = context
+    http = FakeHTTP(diagnostic_response('{"schema_version":"1.0","teaching":{}}', reasoning_tokens=5000))
+    generate_spec(OpenRouterClient('m', budget, trace, session=http), evidence(), case(), ir_model=FakeIR)
+    assert http.payloads[0]['reasoning'] == {'effort': 'low'}
+    assert http.payloads[0]['max_tokens'] == 15000
+    [diag] = trace_events(trace, 'response_diagnostics')
+    assert diag['outcome'] == 'content' and diag['finish_reason'] == 'stop'
+    assert diag['content_type'] == 'str' and diag['content_chars'] == 38
+    assert diag['reasoning_tokens'] == 5000 and diag['completion_tokens'] == 8000
+    assert diag['reasoning_chars'] == len('private chain of thought')
+    text = open(trace._file.name, encoding='utf-8').read()
+    assert 'private chain of thought' not in text and 'test-secret-key' not in text
+    assert 'schema_version' not in json.dumps(diag)  # No response content.
+
+
+@pytest.mark.parametrize('finish,native', [('length', None), ('stop', 'max_tokens'), ('length', 'length')])
+def test_truncated_response_is_never_parsed_even_if_valid_json(context, finish, native):
+    budget, trace = context
+    http = FakeHTTP(diagnostic_response('{"schema_version":"1.0","teaching":{}}', finish, native, 7990))
+    with pytest.raises(GenerationFailure, match='truncated'):
+        generate_spec(OpenRouterClient('m', budget, trace, session=http), evidence(), case(), ir_model=FakeIR)
+    assert trace_events(trace, 'response_diagnostics')[0]['outcome'] == 'truncated'
+    assert trace_events(trace, 'parsed') == []
+
+
+@pytest.mark.parametrize('content,kind', [('', 'str'), ('  \n', 'str'), (None, 'NoneType')])
+def test_empty_content_is_distinguished_from_malformed_json(context, content, kind):
+    budget, trace = context
+    http = FakeHTTP(diagnostic_response(content, reasoning_tokens=8000))
+    with pytest.raises(GenerationFailure, match='no textual specification'):
+        generate_spec(OpenRouterClient('m', budget, trace, session=http), evidence(), case(), ir_model=FakeIR)
+    [diag] = trace_events(trace, 'response_diagnostics')
+    assert diag['outcome'] == 'empty' and diag['content_type'] == kind
+
+
+def test_malformed_json_is_reported_as_content_then_parse_failure(context):
+    budget, trace = context
+    http = FakeHTTP(diagnostic_response('{"schema_version":'))
+    with pytest.raises(GenerationFailure, match='not a valid finite JSON'):
+        generate_spec(OpenRouterClient('m', budget, trace, session=http), evidence(), case(), ir_model=FakeIR)
+    assert trace_events(trace, 'response_diagnostics')[0]['outcome'] == 'content'
+    assert len(trace_events(trace, 'parse_failure')) == 1
+
+
+def test_unsupported_reasoning_parameter_is_dropped_once(context):
+    budget, trace = context
+    http = FakeHTTP(response(status=400, error='reasoning is not supported by this model'), response())
+    generate_spec(OpenRouterClient('m', budget, trace, session=http), evidence(), case(), ir_model=FakeIR)
+    assert 'reasoning' in http.payloads[0] and 'reasoning' not in http.payloads[1]
+    assert budget.semantic_calls == 1

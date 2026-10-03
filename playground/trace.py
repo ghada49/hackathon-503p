@@ -9,6 +9,10 @@ from pathlib import Path
 _PRIVATE = re.compile(r'authorization|api.?key|credential|password|secret|reasoning|chain.?of.?thought|access.?token', re.I)
 
 
+# Integer usage counts only; reasoning text itself remains redacted.
+_COUNTS = frozenset({'reasoning_tokens', 'reasoning_chars'})
+
+
 class TraceLogger:
     def __init__(self, path: str | Path, *, clock=time.monotonic, started: float | None = None):
         self.clock = clock
@@ -18,7 +22,8 @@ class TraceLogger:
 
     def sanitize(self, value):
         if isinstance(value, dict):
-            return {str(k): '[REDACTED]' if _PRIVATE.search(str(k)) else self.sanitize(v) for k, v in value.items()}
+            return {str(k): v if k in _COUNTS and (v is None or type(v) is int) else
+                    '[REDACTED]' if _PRIVATE.search(str(k)) else self.sanitize(v) for k, v in value.items()}
         if isinstance(value, (list, tuple)):
             return [self.sanitize(v) for v in value]
         if isinstance(value, str):

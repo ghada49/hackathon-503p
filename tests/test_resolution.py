@@ -214,6 +214,17 @@ def test_warning_only_helper_grounding_is_retained(ir):
     assert result.classification['warning']
 
 
+@pytest.mark.parametrize('absent', [('tests',), ('invariants',), ('tests', 'invariants')])
+def test_model_authored_checks_are_optional_but_runtime_checks_remain(ir, absent):
+    for key in absent:
+        ir[key] = []
+    result = resolve(ir)
+    assert result.status == 'FULL_SUCCESS'
+    assert result.minima['autonomous_checks_present']
+    assert result.minima['scientific_checks_pass']
+    assert not result.repair_requests
+
+
 @pytest.mark.parametrize('root', ['controls', 'explorations', 'mechanism_grounding', 'evidence'])
 def test_exact_duplicate_optional_record_can_be_deduplicated(ir, root):
     ir[root].append(copy.deepcopy(ir[root][0]))

@@ -337,12 +337,28 @@ def test_missing_version_repair_uses_final_schema_then_science(make_client, ir):
     assert 'schema_version' not in ir
 
 
-def test_malformed_json_initial_reconstruction_is_scientifically_validated(make_client, ir):
-    updates = [{'path': name, 'value': value} for name, value in ir.items()]
-    client, http = make_client('bad JSON', json.dumps({'updates': updates}))
+@pytest.mark.parametrize('broken', ['bad JSON', '{"computation":{"nodes":['])
+def test_malformed_json_uses_compact_fresh_regeneration(make_client, ir, broken):
+    client, http = make_client(broken, json.dumps(ir))
     result = compile(client)
     assert result.accepted and result.validation.ok
     assert len(http.payloads) == 2
+    first, second = http.payloads
+    assert first['response_format'] == second['response_format']
+    assert first['max_tokens'] == second['max_tokens'] == 15000
+    assert first['messages'][1] == second['messages'][1]
+    assert second['messages'][0]['content'].startswith(first['messages'][0]['content'])
+    assert 'Regenerate the COMPLETE specification from scratch' in second['messages'][0]['content']
+    assert 'allowed_paths' not in json.loads(second['messages'][1]['content'])
+    assert client.budget.semantic_calls == 2 and client.budget.repairs == 1
+
+
+def test_failed_compact_regeneration_cannot_trigger_third_call(make_client, ir):
+    client, http = make_client('bad JSON', 'still incomplete {')
+    result = compile(client)
+    assert not result.accepted
+    assert len(http.payloads) == client.budget.semantic_calls == 2
+    assert result.reason.startswith('Compact regeneration failed')
 
 
 def test_scientific_validation_wall_time_uses_run_budget(ir, monkeypatch):
@@ -395,3 +411,36 @@ def test_cli_output_failure_never_reports_success(tmp_path, monkeypatch, ir, fai
     assert agent.run(input_path, output, 'same-model', session=HTTP(json.dumps(ir))) == 1
     final = json.loads((output / 'trace.jsonl').read_text().splitlines()[-1])
     assert final['result']['success'] is False
+
+
+class FinishHTTP:
+    """Offline responses with explicit provider finish reasons."""
+    def __init__(self, *responses):
+        self.responses = list(responses)
+        self.payloads = []
+
+    def post(self, url, **kwargs):
+        self.payloads.append(copy.deepcopy(kwargs['json']))
+        if not self.responses:
+            raise AssertionError('Unexpected extra request')
+        content, finish = self.responses.pop(0)
+        return SimpleNamespace(status_code=200, headers={}, json=lambda: dict(
+            choices=[dict(message=dict(content=content), finish_reason=finish)],
+            usage=dict(prompt_tokens=20, completion_tokens=15000 if finish == 'length' else 3000)))
+
+
+@pytest.mark.parametrize('second_finish', ['length', 'stop'])
+def test_truncation_is_never_accepted_and_never_causes_third_call(tmp_path, monkeypatch, ir, second_finish):
+    monkeypatch.setenv('OPENROUTER_API_KEY', 'offline-integration-key')
+    trace = TraceLogger(tmp_path / 'trace.jsonl')
+    # The first response is complete, valid IR but provider-truncated: it must not be used.
+    http = FinishHTTP((json.dumps(ir), 'length'), (json.dumps(ir), second_finish))
+    client = OpenRouterClient('same/frozen-model', BudgetManager(), trace, session=http)
+    result = compile(client)
+    trace.close()
+    assert len(http.payloads) == client.budget.semantic_calls == 2
+    assert all(p['max_tokens'] == 15000 for p in http.payloads)
+    assert client.budget.completion_tokens_total <= 30000
+    assert result.accepted is (second_finish == 'stop')
+    if second_finish == 'length':
+        assert result.spec is None and not result.accepted
