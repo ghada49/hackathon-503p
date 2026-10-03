@@ -49,6 +49,9 @@ def resolve_experience(spec: PaperMechanismIR) -> tuple[ExperienceSpec | None, l
         return None, issues
     valid_targets = nodes | controls | set(visual_ids) | COMPONENT_IDS
     ambiguous = (nodes | controls) & (set(visual_ids) | COMPONENT_IDS)
+    ambiguous |= set(visual_ids) & COMPONENT_IDS
+    if set(visual_ids) & COMPONENT_IDS:
+        issues.append({'path': 'visuals', 'message': 'Visual IDs collide with canonical component IDs'})
     if duplicate_visual_ids:
         issues.append({'path': 'experience', 'message': 'Experience references are ambiguous because visual IDs repeat'})
     if experience.hero_visual and experience.hero_visual not in visual_ids:
@@ -116,6 +119,28 @@ def _repair_scopes(check: str, path: str | None, spec: PaperMechanismIR | None) 
             for i, node in enumerate(spec.computation.nodes):
                 if node.id in related:
                     paths.add(f'computation.nodes.{i}')
+            if check in {'control_influence', 'control_visible_influence'}:
+                # A disconnected control has no downstream nodes to nominate.
+                # Prefer an explicit exploration target, otherwise nominate only
+                # the first computed output's path, not every unrelated output.
+                candidates = related & {n.id for n in spec.computation.nodes}
+                if not candidates:
+                    node_ids = {n.id for n in spec.computation.nodes}
+                    candidates = {e.expectation.value for e in spec.explorations
+                                  if e.expectation and target_ids.intersection(e.change.suggested_values)
+                                  and e.expectation.value in node_ids}
+                    if not candidates:
+                        ordered = spec.computation.outputs + [n.id for n in spec.computation.nodes if n.display]
+                        candidates = set(next(([name] for name in ordered if name in node_ids), []))
+                    candidates |= {source for source, downstream in dependencies.items()
+                                   if candidates.intersection(downstream)}
+                for i, node in enumerate(spec.computation.nodes):
+                    if node.id in candidates:
+                        paths.add(f'computation.nodes.{i}')
+                for i, visual in enumerate(spec.visuals):
+                    bindings = set(visual.bindings.values()) | ({visual.value} if visual.value else set())
+                    if bindings.intersection(candidates | target_ids):
+                        paths.update({f'visuals.{i}.value', f'visuals.{i}.bindings'})
         except ComputationError:
             pass
     return sorted(paths)
@@ -437,12 +462,15 @@ def validate_spec(spec: PaperMechanismIR | dict, source_blocks: Iterable[SourceB
     return result()
 
 
-def derive_playground(spec: PaperMechanismIR | dict, source_blocks=None) -> DerivedPlayground:
+def derive_playground(spec: PaperMechanismIR | dict, source_blocks=None, *,
+                      validation: ValidationResult | None = None) -> DerivedPlayground:
+    """Reuse a report only for the same unchanged spec and source context."""
     spec = spec if isinstance(spec, PaperMechanismIR) else PaperMechanismIR.model_validate(spec)
     # Derivation preserves executable candidates; the orchestrator decides whether
     # the validation report permits success, repair, or best-so-far retention.
     defaults = evaluate(spec)
-    validation = validate_spec(spec, source_blocks)
+    if validation is None:
+        validation = validate_spec(spec, source_blocks)
     experience, _ = resolve_experience(spec)
     return DerivedPlayground(spec=spec, dependency_graph=derive_dependencies(spec), evaluated_defaults=defaults,
                              visible_nodes=visible_nodes(spec) & set(defaults), rubric_summary=validation.rubric_summary,

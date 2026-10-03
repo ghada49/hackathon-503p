@@ -14,7 +14,7 @@ spec = PaperMechanismIR.model_validate_json(model_response_json)
 report = validate_spec(spec, source_blocks=focused_evidence.blocks,
                        trace=trace_logger.event)
 if report.ok:
-    derived = derive_playground(spec, focused_evidence.blocks)
+    derived = derive_playground(spec, focused_evidence.blocks, validation=report)
 else:
     failures = [failure.model_dump() for failure in report.failures]
     # Orchestrator decides whether to request its one permitted repair.
@@ -33,6 +33,16 @@ Allowed repair paths include the enclosing node/item and, for test/invariant/con
 failures, related computation nodes. They do not open unrelated teaching or test
 fields. The patcher must still enforce protected paths and revalidate.
 
+Invalid operand forms report `Operand must be {ref}, {const}, or {op, inputs}.`
+at the real operand path, including nested operands, without union variant labels.
+For control-influence failures, repair scopes include the control and its existing
+downstream computation path. A fully disconnected control instead nominates its
+structured exploration's target path, or the first computed output's path when
+no such target exists. Only visual value/binding fields referencing that path or
+control are opened. Unrelated outputs, narrative, evidence, provenance, and
+verification targets are not opened by this control-repair policy. These scopes
+permit wiring repairs; they do not assert that a proposed formula is correct.
+
 `derive_playground()` now preserves candidates with executable default calculations
 even when their validation report contains serious scientific/teaching failures.
 It throws for invalid core schema or computations that cannot run. Inspect
@@ -40,6 +50,14 @@ It throws for invalid core schema or computations that cannot run. Inspect
 claim that the candidate passed validation. This lets the orchestrator snapshot
 a usable candidate while attempting repair. Bad visual references are recoverable
 and set `visual.requires_fallback=true` rather than discarding numerical results.
+
+`derive_playground(spec, source_blocks=None, *, validation=None)` accepts an
+existing `ValidationResult`. When supplied, validation is not run again; executable
+defaults and dependencies are still derived, and execution failures still raise.
+The caller must supply a report for the **exact unchanged specification and source
+context** that produced it. After any edit or source-context change, validate again.
+There is no persistent or cross-candidate cache, and freshness is not inferred by
+this API. Omitting the report preserves the original validation behavior.
 
 Pass actual `SourceBlock`s to check evidence references. Omitting blocks leaves a
 warning and `source_references_verified=false`; it does **not** verify grounding.
@@ -126,6 +144,8 @@ computation binding. With no explicit ID, `derive_visual_ids(spec)` generates
 suffixes. `derived.visual_ids` is the parallel ID list for Person 3 to use on the
 actual rendered components. Duplicate explicit IDs trigger canonical experience
 fallback because their intended targets are ambiguous.
+Visual IDs colliding with canonical component IDs also produce recoverable
+experience diagnostics and canonical fallback; no target meaning is guessed.
 
 Calculation order/emphasis refer to computation nodes. Guided-step and annotation
 targets refer to controls, nodes, visual IDs, or canonical component IDs:
@@ -170,6 +190,9 @@ Top-level nodes add `id` and optional kind/shape/display metadata. Nested `param
 accept only the keys registered for that operation. Unknown references, cycles,
 duplicate IDs, and executable expression strings are rejected. Constants support
 finite JSON numbers, booleans, strings, and rectangular rank-one/two arrays.
+Array elements must all be numeric, all boolean, or all strings; integers and
+floats may coexist. Both interpreters reject mixtures before implicit conversion
+can change their meaning, including mixtures across matrix rows.
 
 | Operations | Inputs and result |
 | --- | --- |
@@ -210,6 +233,9 @@ Known body shapes are checked before any body executes. Dynamic shapes use one
 bounded body result to check the projection before retaining it or continuing;
 subsequent results must have the same shape. Outputs of exactly 10,000 elements
 are allowed. `elementwise` checks that its body returns a scalar.
+`scan` checks projected history rank and element count before executing its body.
+`concat` checks the combined element count before constructing its output.
+`iterate` retains only its current state rather than an unused history.
 
 `where` masks elementwise log/sqrt/exp/divide/pow domains in unselected elements;
 it is not a general per-element short-circuit engine for reductions or matrix
@@ -254,8 +280,10 @@ Explorations must change visible computed values and satisfy optional structured
 expectations. Expectations about increases/decreases require all entries to
 strictly increase/decrease; use scalar nodes to describe aggregate changes.
 
-The freeze regression run passed all 37 tests with no skips on actual CPython
+The final freeze regression run passed all 48 tests with no skips on actual CPython
 3.11.9, NumPy 2.3.5, Pydantic 2.13.5, and Node 24.21.0. This includes boolean
-`where` type parity and pre-materialization `map` allocation checks in both
-interpreters. Full CLI, real-paper semantic generation, HTML compilation, browser
+`where` type parity, homogeneous-array enforcement, pre-materialization allocation
+checks, experience collisions, scoped control repairs, operand diagnostics, and
+validation reuse. All JavaScript parity checks and original fixture scenarios
+passed. Full CLI, real-paper semantic generation, HTML compilation, browser
 rendering, and offline artifact acceptance belong to the other integration tracks.

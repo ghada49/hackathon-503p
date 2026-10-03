@@ -28,6 +28,7 @@
     const child = v.length ? shape(v[0]) : [];
     if (v.some(x => !same(shape(x), child))) fail('Arrays must be rectangular');
     const s = [v.length, ...child];
+    if (new Set(flat(v).map(x => typeof x)).size > 1) fail('Array elements must have a single type');
     if (s.length > 2 || flat(v).length > LIMITS.elements) fail('Array size/rank limit exceeded');
     return s;
   }
@@ -305,13 +306,14 @@
         if (op === 'iterate') { count = integer(args[1], 'iteration count'); items = Array.from({length: Math.max(0, Math.min(count, 101))}, (_, i) => i); }
         else { if (shape(args[1]).length !== 1) fail('scan requires vector'); items = args[1]; count = items.length; }
         if (count < 0 || count > LIMITS.iterations) fail('Iteration limit exceeded');
+        if (op === 'scan' && (shape(args[0]).length + 1 > 2 || count * flat(args[0]).length > LIMITS.elements)) fail('scan projected output exceeds size/rank limit');
         let state = args[0]; const history = [];
         items.forEach((item, index) => {
           const locals = Object.assign(Object.create(null), values, {state, index});
           if (op === 'scan') locals.item = item;
           const next = finite(expression(p.body, locals, null, depth + 1));
           if (!same(typeOf(next), typeOf(args[0]))) fail('Iteration state changed shape/type');
-          state = next; history.push(state);
+          state = next; if (op === 'scan') history.push(state);
         });
         return op === 'iterate' ? state : finite(history);
       }
@@ -378,6 +380,8 @@
     if(op==='flatten')return flat(a[0]);
     if(op==='reshape')return reshape(a[0],p.shape);
     if(op==='concat') {
+      if(new Set(a.map(x => literalType(x).dtype)).size > 1) fail('concat operand types differ');
+      if(a.reduce((total, x) => total + flat(x).length, 0) > LIMITS.elements) fail('concat projected output exceeds element limit');
       const v=a.map(x=>p.promote_scalars&&!Array.isArray(x)?[x]:x);
       if(v.some(x=>!Array.isArray(x)))fail('concat requires arrays');const axis=axisOf(p,v[0],0),rank=shape(v[0]).length;
       if(v.some(x=>shape(x).length!==rank))fail('concat rank mismatch');

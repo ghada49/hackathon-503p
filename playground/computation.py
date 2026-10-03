@@ -52,7 +52,16 @@ def _dict(value: Any) -> dict:
 
 def _array(value: Any) -> np.ndarray:
     try:
+        if isinstance(value, (list, tuple)):
+            leaves = np.asarray(value, dtype=object).reshape(-1)
+            kinds = {'boolean' if isinstance(x, (bool, np.bool_)) else
+                     'numeric' if isinstance(x, (int, float, np.number)) else
+                     'categorical' if isinstance(x, str) else 'invalid' for x in leaves}
+            if len(kinds) > 1 or 'invalid' in kinds:
+                raise ComputationError('Array elements must have a single type')
         result = np.asarray(value)
+    except ComputationError:
+        raise
     except (TypeError, ValueError) as exc:
         raise ComputationError('Arrays must be rectangular') from exc
     if result.size > MAX_ELEMENTS or result.ndim > 2:
@@ -587,6 +596,10 @@ class Evaluator:
             items = sequence
         if not 0 <= count <= MAX_ITERATIONS:
             raise ComputationError('Iteration count must be between 0 and 100')
+        if op == 'scan':
+            initial_array = _array(initial)
+            if initial_array.ndim + 1 > 2 or count * initial_array.size > MAX_ELEMENTS:
+                raise ComputationError('scan projected output exceeds size/rank limit')
         state, history = initial, []
         for i, item in enumerate(items):
             local = {**values, 'state': state, 'index': i}
@@ -597,7 +610,8 @@ class Evaluator:
                 raise ComputationError('Iteration state type/shape changed')
             _finite(candidate)
             state = candidate
-            history.append(state)
+            if op == 'scan':
+                history.append(state)
         return state if op == 'iterate' else _json(_array(history))
 
     def _operation(self, op: str, args: list, p: dict, mask: Any) -> Any:
@@ -664,6 +678,10 @@ class Evaluator:
             return list(r)
         if op == 'concat':
             arrays = [_array(a) for a in args]
+            if len({_literal_type(a).dtype for a in args}) > 1:
+                raise ComputationError('concat operand types differ')
+            if sum(a.size for a in arrays) > MAX_ELEMENTS:
+                raise ComputationError('concat projected output exceeds element limit')
             if p.get('promote_scalars', False):
                 arrays = [a.reshape(1) if a.ndim == 0 else a for a in arrays]
             axis = self._axis(p, arrays[0], default=0)

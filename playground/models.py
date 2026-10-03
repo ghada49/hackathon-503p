@@ -149,7 +149,9 @@ class Expression(Contract):
     op: str = Field(min_length=1)
     inputs: list[Annotated[
         Union[Annotated[Reference, Tag('ref')], Annotated[Constant, Tag('const')],
-              Annotated['Expression', Tag('op')]], Discriminator(operand_tag)
+              Annotated['Expression', Tag('op')]], Discriminator(
+                  operand_tag, custom_error_type='invalid_operand',
+                  custom_error_message='Operand must be {ref}, {const}, or {op, inputs}.')
     ]] = Field(max_length=100)
     params: dict[str, Any] = Field(default_factory=dict)
 

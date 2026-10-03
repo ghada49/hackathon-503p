@@ -38,4 +38,16 @@ This handoff is stored in the repository for the frontend track to use at integr
 The freeze fixes update this same interpreter: boolean `where` keeps boolean
 values when an array branch is inactive, and `map` rejects oversized projected
 outputs before assembling them. Include the updated `runtime/computation.js`.
-The full 37-test suite passed on Python 3.11.9 with Node parity checks and no skips.
+The final 48-test suite passed on Python 3.11.9 with Node parity checks and no skips.
+
+The final interpreter also rejects arrays mixing numeric, boolean, and string
+elements and checks `scan`/`concat` projected output capacity before materialization.
+Visual IDs must not collide with canonical component IDs such as `controls` or
+`main_visual`; collisions generate recoverable diagnostics and canonical experience
+fallback. Use `derived.resolved_experience` to honor this fallback.
+
+The orchestrator may call `derive_playground(ir, source_blocks, validation=report)`
+to reuse a report for the exact unchanged IR and source context. Revalidate after
+either changes; this API provides no persistent/cross-candidate cache. Invalid
+operand diagnostics now name the accepted forms, and control-influence repair
+scopes include narrowly selected computation paths and relevant visual bindings.
