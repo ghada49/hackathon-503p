@@ -13,3 +13,17 @@ Include teaching.title/idea/why/mental_model, symbols and a limitation/assumptio
 Preserve a coherent teaching sequence: controls teach distinct/relevant aspects, a primary visual materially clarifies the relationship, and useful intermediate values expose its steps. Prefer an appropriate scientific view to a generic dashboard.
 For numeric visuals (number, table, vector, matrix, heatmap, bar_chart, line_chart, scatter), set value to the existing computed/control ID supplying the numeric data; bindings alone do not supply the renderer's displayed value. Charts require a real vector/matrix node, not separate scalar bindings. Put formula text in options.display, never in value. Mark important mechanism stages and outputs display=true and give them readable labels so their evaluated values are visible. Use bindings only for their supported declarative role, such as a pipeline's referenced nodes.
 Optional experience uses only OUTPUT_SCHEMA's declarative fields/enums and valid semantic IDs: hero_visual targets a visual; calculation_order/emphasis_nodes target nodes; guided_mode/annotations target semantic components. No markup, styles, coordinates or selectors. Software derives dependencies and compiles presentation with canonical fallback.
+
+EXPLICIT CHECKS
+
+Tests and invariants are optional unless the learning brief explicitly asks to
+"check", "verify", or confirm a numerical/scientific relationship.
+
+When the brief explicitly requests a check, encode it as an executable test or
+invariant whenever the DSL can represent it safely.
+
+Do not invent additional checks beyond the brief.
+
+Use exact existing IDs and shape-compatible assertions.
+For ordinary deterministic floating-point checks, prefer a tolerance around
+1e-6 unless the numerical scale clearly requires otherwise.
