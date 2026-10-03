@@ -42,6 +42,15 @@ def _bad_indices(report, root, checks):
             and re.fullmatch(root + r'\.\d+', f.path)}
 
 
+def _exploration_identity(exploration):
+    """Same setup and checked consequence is one exploration, regardless of title."""
+    expectation = exploration.expectation
+    consequence = None if expectation is None else dict(
+        type=expectation.type, value=expectation.value, expected=expectation.expected)
+    return json.dumps(dict(suggested_values=exploration.change.suggested_values,
+                           consequence=consequence), sort_keys=True)
+
+
 def _visual_plan(assessment):
     """Prefer requested valid science views; fallback binds only existing computed data."""
     spec, derived = assessment.spec, assessment.derived
@@ -74,9 +83,12 @@ def _visual_plan(assessment):
                     title=nodes[name].label or name if name in nodes else name)])
     outputs = [name for name in spec.computation.outputs if name in nodes and name in values]
     if outputs:
-        return dict(strategy='dependency', visuals=[dict(id=fallback_id, type='nodes_edges',
-                    bindings={name: name for name in outputs}, title='Mechanism relationships',
-                    options=dict(dependency_graph=derived.dependency_graph, supporting_values=outputs))])
+        core = set(outputs) | {name for name, downstream in derived.dependency_graph.items()
+                               if set(outputs).intersection(downstream)}
+        ordered = [c.id for c in spec.controls] + [n.id for n in spec.computation.nodes]
+        return dict(strategy='dependency', visuals=[dict(id=fallback_id, type='pipeline',
+                    bindings={name: name for name in ordered if name in core and name in values},
+                    title='Mechanism relationships')])
     return dict(strategy='unavailable', visuals=[])
 
 
@@ -108,7 +120,7 @@ def _criteria(assessment):
         autonomous_checks_present=spec is not None and bool(spec.tests and spec.invariants), scientific_checks_pass=checks_ok)
     quality = dict(structural_only=True, core_and_teaching_preserved=True,
         distinct_controls=spec is not None and len({spec.controls[i].label for i in controls}) == len(controls),
-        distinct_explorations=spec is not None and len({json.dumps(spec.explorations[i].change.suggested_values, sort_keys=True)
+        distinct_explorations=spec is not None and len({_exploration_identity(spec.explorations[i])
                                                      for i in explorations}) == len(explorations),
         scientific_visual=plan['strategy'] != 'unavailable')
     viable = all(minima[key] for key in ('executable', 'grounded', 'meaningful_visual', 'explanation_present',
@@ -196,7 +208,7 @@ def resolve_assessment(assessment, source_blocks, *, assess, trace=None, budget=
             if not quality[key]:
                 seen = set()
                 for i, item in enumerate(getattr(assessment.spec, root)):
-                    identity = item.label if root == 'controls' else json.dumps(item.change.suggested_values, sort_keys=True)
+                    identity = item.label if root == 'controls' else _exploration_identity(item)
                     if identity in seen:
                         paths.add(f'{root}.{i}.label' if root == 'controls' else f'{root}.{i}')
                     seen.add(identity)

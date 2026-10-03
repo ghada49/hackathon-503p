@@ -6,8 +6,9 @@ and writes a standalone HTML playground with live controls and visualizations.
 
 **Team:** Ghada Al Danab, Aya El Hajj, Joud Senan.
 
-`integration3` combines the Person 3 frontend on `integration2` with the hardened
-Person 1/2 `integration` branch. See [merge and verification notes](docs/integration3.md).
+`integration4` hardens the combined `integration3` pipeline for safe partial
+packaging and rubric resilience. See [hardening and verification notes](docs/integration4.md)
+and the preceding [merge notes](docs/integration3.md).
 
 **Development MODEL_ID:** `deepseek/deepseek-v4.1-flash`.
 The agent always uses the exact model passed through `--model`, including during
@@ -33,8 +34,14 @@ python agent.py --input case.json --output out --model MODEL_ID
 
 On success, open `out/index.html`. No second renderer command is required.
 The exit code is zero only after scientific acceptance, successful derivation,
-HTML writing, and static artifact checks. Failed runs return nonzero, retain
-available diagnostics, and remove stale or partial `index.html`.
+HTML writing, and static artifact checks. A safe `USABLE_PARTIAL` also writes an
+inspectable `index.html`, but retains that resolution status, returns nonzero,
+and records final trace `success=false`. Rendering requires a derivation and the
+existing resolution minima `executable`, `grounded`, `scientific_checks_pass`,
+`meaningful_visual`, and `explanation_present` all to be true. Failed scientific
+checks, missing grounding, or invalid computation never qualify. These checks
+do not prove semantic fidelity to the paper. Unsafe results and packaging failures
+leave no HTML; stale HTML is removed before each run. Diagnostics remain available.
 
 `OPENROUTER_API_KEY` must be in the process environment; the application does not
 implicitly read `.env`. Never commit credentials or pass them through case JSON.
@@ -44,7 +51,24 @@ implicitly read `.env`. Never commit credentials or pass them through case JSON.
 [Attention case](examples/cases/attention.json) contains a short, attributed
 teaching paraphrase of Section 3.2.1 of
 [Attention Is All You Need](https://arxiv.org/html/1706.03762v7), rather than a
-runtime dependency on downloading the paper. Running the setup command produces
+runtime dependency on downloading the paper. Its committed
+[showcase output](examples/output/attention/index.html) is fixture/mock generated
+through the actual agent and renderer, not manually authored HTML. It is an
+example artifact, **not a successful live assessment run**. The attributed
+paraphrase and toy inputs are for teaching, not a reproduction of paper experiments.
+Reproduce the same self-contained output without an API key or any model/network
+call using:
+
+```powershell
+python scripts/generate_showcase.py
+```
+
+The script uses the unchanged Attention fixture with source references adapted
+in memory to this example input. It records mock diagnostics under ignored
+`out/showcase-generation/` and copies only the validated HTML to the showcase path.
+Its mock token counts are test data, not measured live usage.
+
+Running the real setup command produces
 `out/index.html` plus `spec.json`, `derived_playground.json`, `source_blocks.json`,
 `source_document.json`, `validation.json`, `resolution.json`, and `trace.jsonl`.
 

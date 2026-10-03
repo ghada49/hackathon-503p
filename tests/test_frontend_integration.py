@@ -158,6 +158,7 @@ def test_partial_recovery_retains_diagnostics_without_reporting_full_success(tmp
     assert run(case, output, 'integration/test-model') == 1
     assert json.loads((output / 'resolution.json').read_text())['status'] == 'USABLE_PARTIAL'
     assert (output / 'derived_playground.json').is_file()
-    assert not (output / 'index.html').exists()
+    assert (output / 'index.html').is_file()
+    assert validate_artifact(output / 'index.html')['self_contained_resources']
     events = [json.loads(line) for line in (output / 'trace.jsonl').read_text().splitlines()]
     assert events[-1]['result']['success'] is False

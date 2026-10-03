@@ -2,7 +2,7 @@ const {test,expect}=require('@playwright/test');
 const {execFileSync}=require('node:child_process');
 const {resolve}=require('node:path');
 const {pathToFileURL}=require('node:url');
-const {existsSync}=require('node:fs');
+const {existsSync,readFileSync}=require('node:fs');
 
 test.beforeAll(()=>{
   const venv=resolve('.venv/Scripts/python.exe');
@@ -48,6 +48,59 @@ for(const name of ['attention','entropy','generic'])for(const mode of ['canonica
     await page.setViewportSize({width:390,height:844});
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
     await page.screenshot({path:`out/browser/${name}-${mode}/mobile.png`,fullPage:true});
+    expect(errors).toEqual([]);expect(requests).toEqual([]);
+  });
+}
+
+for(const variant of ['grounding-union','safe-partial','fallback-shared','fallback-invalid','showcase']){
+  test(`hardening ${variant} renders the supported offline contract`,async({page,context})=>{
+    await context.setOffline(true);
+    const errors=[],requests=[];
+    page.on('pageerror',e=>errors.push(e.message));
+    page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
+    page.on('request',r=>{if(/^https?:/.test(r.url()))requests.push(r.url());});
+    const directory=variant==='showcase'?'examples/output/attention':`out/browser/${variant}`;
+    await page.goto(pathToFileURL(resolve(`${directory}/index.html`)).href);
+    await expect(page.locator('#runtime-error')).toBeHidden();
+    if(variant==='showcase'){
+      await expect(page.locator('#concept-title')).not.toBeEmpty();
+      const before=await page.evaluate(()=>PlaygroundUI.getValues().attention_output);
+      await page.getByLabel('Query matrix Q, row 1, column 1',{exact:true}).fill('3');
+      await expect.poll(()=>page.evaluate(()=>PlaygroundUI.getValues().attention_output)).not.toEqual(before);
+    } else {
+      const cards=page.locator('#source-excerpts .source-excerpt');
+      await expect(cards).toHaveCount(2);
+      await expect(cards.nth(0)).toContainText('equation · b0000');
+      await expect(cards.nth(1)).toContainText('paragraph · b0001');
+      await expect(page.locator('#source-excerpts')).not.toContainText('Unreferenced source context');
+      await expect(page.locator('#evidence li')).toHaveCount(1);
+      const before=await page.evaluate(()=>PlaygroundUI.getValues().posterior);
+      await page.getByLabel('Prior probability',{exact:true}).fill('0.6');
+      await expect.poll(()=>page.evaluate(()=>PlaygroundUI.getValues().posterior)).not.toEqual(before);
+      if(variant==='safe-partial'){
+        const resolution=JSON.parse(readFileSync(resolve(`${directory}/resolution.json`),'utf8'));
+        const events=readFileSync(resolve(`${directory}/trace.jsonl`),'utf8').trim().split('\n').map(JSON.parse);
+        expect(resolution.status).toBe('USABLE_PARTIAL');
+        expect(events.at(-1).result.success).toBe(false);
+        await expect(page.locator('[data-exploration]')).toHaveCount(1);
+      }
+      if(variant.startsWith('fallback-')){
+        const payload=await page.locator('#playground-data').textContent().then(JSON.parse);
+        expect(payload.ir.visuals[0].type).toBe('pipeline');
+        expect(payload.visual_ids).toEqual(['mechanism']);
+        const directed=variant==='fallback-shared';
+        expect(payload.experience.mode).toBe(directed?'directed':'canonical');
+        const stage=page.locator(directed?'#experience-stage':'#canonical-stage');
+        await expect(stage).toBeVisible();
+        expect(await stage.locator('.pipeline-node').count()).toBeGreaterThan(2);
+        await expect(stage).not.toContainText('Showing the calculation path for this visual.');
+        if(directed){
+          await page.getByRole('button',{name:'Guide me'}).click();
+          await expect(page.locator('.guide-target')).toHaveCount(1);
+        }
+      }
+    }
+    await expect(page.locator('#runtime-error')).toBeHidden();
     expect(errors).toEqual([]);expect(requests).toEqual([]);
   });
 }

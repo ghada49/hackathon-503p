@@ -41,6 +41,16 @@ def _write_json(path: Path, data) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, allow_nan=False, indent=2) + '\n', encoding='utf-8')
 
 
+def _safe_renderable_partial(result) -> bool:
+    """Use the current resolution's safety minima without changing acceptance."""
+    resolution = result.resolution or {}
+    minima = resolution.get('minima', {})
+    return (resolution.get('status') == 'USABLE_PARTIAL' and result.derived is not None
+            and all(minima.get(key) is True for key in (
+                'executable', 'grounded', 'scientific_checks_pass',
+                'meaningful_visual', 'explanation_present')))
+
+
 def run(input_path: str | Path, output_path: str | Path, model: str, *,
         session=None, ir_model=None, operations=None, allow_url: bool = False,
         context_max_chars: int = DEFAULT_CONTEXT_CHARS) -> int:
@@ -121,9 +131,13 @@ def run(input_path: str | Path, output_path: str | Path, model: str, *,
             trace.log('output', 'write_ir', dict(schema_valid=True, scientific_acceptance=success if scientific else None, artifact='spec.json'))
         elif spec is not None:
             _write_json(output / 'candidate.json', spec)
-        if scientific and success:
+        if scientific:
+            renderable = success or _safe_renderable_partial(result)
+            trace.log('artifact', 'render_policy', dict(renderable=renderable,
+                resolution_status=(result.resolution or {}).get('status'), full_success=success))
+        if scientific and renderable:
             if result.derived is None:
-                raise ValueError('Accepted scientific candidate has no executable derivation')
+                raise ValueError('Renderable scientific candidate has no executable derivation')
             budget.check_available()
             try:
                 render_to_file(result.derived, output / 'index.html', source=metadata)
@@ -139,7 +153,7 @@ def run(input_path: str | Path, output_path: str | Path, model: str, *,
     except Exception as exc:
         success = False
         if scientific and output is not None:
-            # A partial or rejected page must never survive as this run's artifact.
+            # Failed packaging must never leave a partial file or stale page.
             (output / 'index.html').unlink(missing_ok=True)
         # Error text may include source/credentials; redact known secrets before stderr.
         if isinstance(exc, ValidationError):
