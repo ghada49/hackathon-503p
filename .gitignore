@@ -1,9 +1,14 @@
 .agents/skills/
 __pycache__/
-*.pyc
+*.py[cod]
+.pytest_cache/
+.env
+.env.*
+!.env.example
 out/
 output/
 node_modules/
 test-results/
 debug.log
 .venv/
+.python311/

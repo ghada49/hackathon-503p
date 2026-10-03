@@ -9,6 +9,11 @@ output, and browser tooling are retained in Git history at
 `8d0bbfdeeb7fc01a6eb3b132fee14c82fced610c`, rather than shipped here.
 Pull this branch to obtain the implementation. It has not been merged to main.
 
+The combined branch `integration2` merges this distribution with Person 1/2's
+`integration` branch. Their scientific fixtures, tests, requirements, and pipeline
+are present there. The removal descriptions below refer to Person 3's original
+distribution. See the [combined integration notes](integration2.md) for usage.
+
 ## 1. Deliverable and ownership
 
 Person 3 implemented a deterministic educational experience compiler that turns

@@ -1,0 +1,3 @@
+# Person 2 runtime dependencies; Person 1 can include this in requirements.txt.
+pydantic==2.13.5
+numpy==2.3.5

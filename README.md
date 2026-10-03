@@ -2,8 +2,23 @@
 
 Person 3 integration module for Paper to Playground. Takes Person 2's validated
 IR / DerivedPlayground and Person 1's source metadata, and produces one offline,
-interactive HTML artifact. Python 3.11; standard library only. No npm, backend,
+interactive HTML artifact. The renderer uses Python 3.11's standard library. No npm, backend,
 API key, CDN, or browser model call is required.
+
+`integration2` combines this renderer with Person 1's orchestration and Person 2's
+scientific runtime from `origin/integration`. Install `requirements.txt` for that
+upstream pipeline; its model generation requires `OPENROUTER_API_KEY`.
+The generated HTML remains independent of those Python dependencies and credentials.
+
+```powershell
+python -m pip install -r requirements.txt
+python agent.py --input case.json --output out --model YOUR_MODEL_ID
+python -m playground.renderer --input out/derived_playground.json --source out/source_blocks.json --output out/index.html
+```
+
+Render after the agent exits successfully. The source-block JSON supplies excerpts;
+pass the `source` metadata dictionary shown below to also include paper title/URL.
+The merge does not change the agent's generation behavior or add model calls.
 
 ```python
 from playground.renderer import render_to_file
@@ -44,10 +59,13 @@ Read the [integration handoff](docs/person3-handoff.md),
 [runtime provenance](docs/science-runtime-provenance.md).
 
 Fixtures, examples, test suites, browser tooling, and review/planning documents
-were removed from this integration distribution. Their verified snapshot remains
+from Person 3 were removed from its integration distribution. Their verified snapshot remains
 at commit `8d0bbfdeeb7fc01a6eb3b132fee14c82fced610c`; restore it in a separate checkout
 when running the historical acceptance suite. Generated output and local tool
 caches are not distributed.
+
+Person 1/2 tests and scientific fixtures are included through the `integration`
+merge. Run the combined suite with `python -m pytest -q` after installing pytest.
 
 ## Maintenance design instructions
 
