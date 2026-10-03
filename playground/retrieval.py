@@ -112,7 +112,16 @@ def build_focus_context(document: SourceDocument, focus: str, audience: str, *,
               + 4 * len(query & set(_tokens(region['title'])))
               + (min(2, sum(blocks[i].type in ('equation', 'algorithm') for i in group)) * 0.5 if matches[r] else 0)
               for r, (region, group, c) in enumerate(zip(regions, region_blocks, counts))]
-    ranked = sorted(range(len(regions)), key=lambda r: (-scores[r], r))
+    requested = {(kind.lower(), number) for kind, number in _REFERENCE.findall(focus)}
+    def explicit_match(r):
+        region = regions[r]
+        if ('section', region.get('section_number')) in requested:
+            return True
+        return any((('equation', blocks[i].equation_number) in requested or
+                    ('eq.', blocks[i].equation_number) in requested or
+                    ('eq', blocks[i].equation_number) in requested)
+                   for i in region_blocks[r] if blocks[i].equation_number)
+    ranked = sorted(range(len(regions)), key=lambda r: (not explicit_match(r), -scores[r], r))
     primary = ranked[0]
     selected: set[int] = set()
     outline = []

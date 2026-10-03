@@ -338,11 +338,14 @@ def test_missing_version_repair_uses_final_schema_then_science(make_client, ir):
 
 
 def test_malformed_json_initial_reconstruction_is_scientifically_validated(make_client, ir):
-    updates = [{'path': name, 'value': value} for name, value in ir.items()]
-    client, http = make_client('bad JSON', json.dumps({'updates': updates}))
+    client, http = make_client('bad JSON', json.dumps(ir))
     result = compile(client)
     assert result.accepted and result.validation.ok
     assert len(http.payloads) == 2
+    assert 'candidate_fields' not in http.payloads[1]['messages'][1]['content']
+    assert result.candidates['initial']['disposition'] == 'UNUSABLE'
+    assert result.candidates['regenerated']['disposition'] == 'FULL_SUCCESS'
+    assert result.candidates['final']['candidate'] == result.spec.model_dump(mode='json')
 
 
 def test_scientific_validation_wall_time_uses_run_budget(ir, monkeypatch):

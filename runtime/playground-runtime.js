@@ -234,6 +234,7 @@
   });
   (ir.explorations || []).forEach((exploration,i) => {
     const card=el('article',null,'panel exploration-card'), head=el('div',null,'exploration-header');
+    card.dataset.experienceTarget=`exploration_${i}`;
     head.append(el('span',i+1,'exploration-number'),el('h3',exploration.title));card.append(head);
     const explanation=el('dl',null,'exploration-description');
     for(const [label,description] of [['Change',exploration.change?.instructions],['Observe',exploration.observe],['Why',exploration.why]])explanation.append(el('dt',label),el('dd',description));

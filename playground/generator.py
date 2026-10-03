@@ -17,6 +17,7 @@ from playground.budget import BudgetExceeded, BudgetManager, MAX_HTTP_ATTEMPTS_P
 from playground.trace import TraceLogger
 from playground.retrieval import DEFAULT_CONTEXT_CHARS, source_context_payload
 from playground.computation import OPERATIONS, LOCAL_NAMES
+from playground.generation_contract import compact_schema, compact_violations, REPAIR_TOKENS
 
 ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions'
 PROMPTS = Path(__file__).resolve().parent.parent / 'prompts'
@@ -103,9 +104,12 @@ def _registry(operations=None) -> dict:
                 ALLOWED_SCENE_ELEMENTS=SCENE_ELEMENTS)
 
 
-def build_generation_messages(case, evidence, schema: dict, *, operations=None, max_prompt_chars: int | None = None) -> list[dict]:
+def build_generation_messages(case, evidence, schema: dict, *, operations=None, max_prompt_chars: int | None = None, structured_output=False) -> list[dict]:
     system = PROMPTS.joinpath('generate.txt').read_text(encoding='utf-8')
-    system += '\nCONTRACT\n' + _json(dict(OUTPUT_SCHEMA=schema, **_registry(operations)))
+    contract = _registry(operations)
+    if not structured_output:
+        contract['OUTPUT_SCHEMA'] = compact_schema(schema)
+    system += '\nCONTRACT\n' + _json(contract)
     # JSON escaping makes source delimiters in source text inert; no source interpolation in system.
     payload = dict(source_url=case.source_url, focus=case.focus, audience=case.audience,
                    **source_context_payload(evidence))
@@ -118,7 +122,8 @@ def build_generation_messages(case, evidence, schema: dict, *, operations=None, 
 def generation_prompt_overhead(case, schema: dict, *, operations=None) -> int:
     """Exact content-character overhead outside SOURCE_BLOCKS/SOURCE_CONTEXT JSON."""
     system = PROMPTS.joinpath('generate.txt').read_text(encoding='utf-8')
-    system += '\nCONTRACT\n' + _json(dict(OUTPUT_SCHEMA=schema, **_registry(operations)))
+    # Reserve the schema too so an unsupported-parameter retry fits the same budget.
+    system += '\nCONTRACT\n' + _json(dict(OUTPUT_SCHEMA=compact_schema(schema), **_registry(operations)))
     brief = dict(source_url=case.source_url, focus=case.focus, audience=case.audience)
     return len(system) + len(_json(brief)) - 1
 
@@ -141,9 +146,13 @@ class OpenRouterClient:
         if not key or not key.strip():
             raise OpenRouterError('OPENROUTER_API_KEY is required in the environment')
         semantic = self.budget.start_semantic(purpose)
-        payload = dict(model=self.model, messages=messages, temperature=0)
+        payload = dict(model=self.model, messages=copy.deepcopy(messages), temperature=0,
+                       reasoning=dict(effort='low', exclude=True))
         if schema and self.structured_output:
-            payload['response_format'] = dict(type='json_schema', json_schema=dict(name='PaperMechanismIR' if purpose == 'generation' else 'RepairPatch', strict=True, schema=schema))
+            payload['response_format'] = dict(type='json_schema', json_schema=dict(name='RepairPatch' if purpose == 'repair' else 'PaperMechanismIR', strict=True, schema=schema))
+            payload['provider'] = dict(require_parameters=True)
+        elif schema and 'OUTPUT_SCHEMA' not in payload['messages'][0]['content']:
+            payload['messages'][0]['content'] += '\nOUTPUT_SCHEMA\n' + _json(schema)
         self.trace.log(purpose, 'semantic_call', dict(semantic_call_number=semantic, model=self.model))
         for attempt in range(MAX_HTTP_ATTEMPTS_PER_SEMANTIC_CALL):
             payload['max_tokens'] = self.budget.completion_allowance(max_tokens)
@@ -181,10 +190,13 @@ class OpenRouterClient:
                     data = {}
                 usage = data.get('usage') or {}
                 # Log only allowlisted metadata; never response messages or raw errors.
+                usage_details = usage.get('completion_tokens_details') or {}
+                reasoning_usage = ({'reasoning_tokens': usage_details['reasoning_tokens']}
+                                   if isinstance(usage_details.get('reasoning_tokens'), (int, float)) else {})
                 self.trace.log(purpose, 'openrouter_call', dict(request_id=data.get('id'), model=self.model,
                     prompt_tokens=usage.get('prompt_tokens'), completion_tokens=usage.get('completion_tokens'),
                     total_tokens=usage.get('total_tokens'), elapsed_seconds=round(self.budget.clock() - started, 6),
-                    semantic_call_number=semantic, http_request_number=request_number, status=status))
+                    semantic_call_number=semantic, http_request_number=request_number, status=status, **reasoning_usage))
                 self.budget.record_usage(prompt_tokens=usage.get('prompt_tokens') or 0,
                     completion_tokens=usage.get('completion_tokens') if status == 200 or usage else 0,
                     reserved_tokens=payload['max_tokens'])
@@ -195,6 +207,7 @@ class OpenRouterClient:
                         self.budget.check_available()
                     try:
                         choice = data['choices'][0]
+                        self.trace.log(purpose, 'completion', dict(finish_reason=choice.get('finish_reason')))
                         content = choice['message']['content']
                         if not isinstance(content, str):
                             raise TypeError('Nontext content')
@@ -204,11 +217,18 @@ class OpenRouterClient:
                 error = data.get('error', {})
                 error_message = str(error.get('message', '')) if isinstance(error, dict) else ''
                 # Adaptive retry only for explicit unsupported optional parameters, never auth/format blindly.
-                if status in (400, 422) and re.search(r'not supported|unsupported|does not support', error_message, re.I):
+                unsupported = status in (400, 422) and re.search(r'not supported|unsupported|does not support', error_message, re.I)
+                no_schema_endpoint = status == 404 and 'response_format' in payload and re.search(
+                    r'no endpoints.*(?:parameters|response_format|structured)', error_message, re.I)
+                if unsupported or no_schema_endpoint:
                     removed = []
-                    for option in ('response_format', 'temperature'):
-                        if option in payload and (option in error_message or option == 'response_format' and 'json_schema' in error_message):
+                    for option in ('response_format', 'temperature', 'reasoning'):
+                        if option in payload and (option in error_message or option == 'response_format' and ('json_schema' in error_message or no_schema_endpoint)):
                             payload.pop(option)
+                            if option == 'response_format':
+                                payload.pop('provider', None)
+                                self.structured_output = False
+                                payload['messages'][0]['content'] += '\nOUTPUT_SCHEMA\n' + _json(schema)
                             removed.append(option)
                     if removed:
                         retry_reason = 'unsupported_optional_parameter:' + ','.join(removed)
@@ -311,12 +331,22 @@ def validate_ir(candidate: dict, ir_model):
                                 failures=failures, allowed_paths=allowed) from exc
 
 
-def generate_spec(client: OpenRouterClient, evidence, case, *, ir_model=None, operations=None, max_prompt_chars: int | None = None):
+def generate_spec(client: OpenRouterClient, evidence, case, *, ir_model=None, operations=None, max_prompt_chars: int | None = None, purpose='generation', regeneration_reason=None):
     model = ir_model or shared_ir_model()
-    schema = model.model_json_schema()
-    text = client.complete(build_generation_messages(case, evidence, schema, operations=operations, max_prompt_chars=max_prompt_chars), purpose='generation', schema=schema)
+    schema = compact_schema(model.model_json_schema())
+    messages = build_generation_messages(case, evidence, schema, operations=operations,
+        max_prompt_chars=max_prompt_chars, structured_output=client.structured_output)
+    if regeneration_reason:
+        messages[0]['content'] += '\nPrevious generation was unusable: ' + regeneration_reason + '. Produce a smaller complete IR from the same source; this is fresh generation, not a patch.'
+    text = client.complete(messages, purpose=purpose, schema=schema,
+                          max_tokens=client.budget.remaining_tokens)
     try:
         candidate = extract_json(text)
+        if model is shared_ir_model() and compact_violations(candidate):
+            raise GenerationFailure('Compact generation bounds exceeded', candidate=candidate,
+                failures=[dict(check='compact_contract', severity='serious', path=p,
+                               message='Compact generation bound exceeded', repairable=True, allowed_paths=[p])
+                          for p in compact_violations(candidate)])
         spec = validate_ir(candidate, model)
     except GenerationFailure as exc:
         if exc.candidate is None and exc.allowed_paths:
@@ -324,9 +354,9 @@ def generate_spec(client: OpenRouterClient, evidence, case, *, ir_model=None, op
             exc.allowed_paths = list(schema.get('properties', {}))
             for failure in exc.failures:
                 failure['allowed_paths'] = list(exc.allowed_paths)
-        client.trace.log('generation', 'parse_failure', dict(failures=exc.failures, allowed_paths=exc.allowed_paths))
+        client.trace.log(purpose, 'parse_failure', dict(failures=exc.failures, allowed_paths=exc.allowed_paths))
         raise
-    client.trace.log('generation', 'parsed', dict(schema_valid=True))
+    client.trace.log(purpose, 'parsed', dict(schema_valid=True))
     return spec
 
 
@@ -633,7 +663,7 @@ def repair_spec(client: OpenRouterClient, existing_spec, failures, allowed_paths
         raise
     client.trace.log('repair', 'repair_attempt', dict(allowed_paths=list(allowed_paths),
         prompt_chars=sum(len(m['content']) for m in messages), max_prompt_chars=max_prompt_chars))
-    return extract_json(client.complete(messages, purpose='repair', schema=_PATCH_SCHEMA, max_tokens=10000))
+    return extract_json(client.complete(messages, purpose='repair', schema=_PATCH_SCHEMA, max_tokens=REPAIR_TOKENS))
 
 
 def _parts(path: str) -> list[str]:

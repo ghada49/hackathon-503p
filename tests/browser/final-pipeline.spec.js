@@ -45,8 +45,22 @@ for(const name of ['attention','entropy','generic'])for(const mode of ['canonica
       await page.keyboard.press('Escape');
       await expect(page.getByRole('button',{name:'Guide me'})).toBeFocused();
     }
+    if(mode!=='shared'){
+      const guide=page.getByRole('button',{name:'Guide me'});
+      await guide.focus();await page.keyboard.press('Enter');
+      for(let i=0;i<2;i++){
+        await expect(page.locator('.exploration-card.guide-target')).toHaveCount(1);
+        await expect(page.locator('#guide-progress')).toHaveText(`Step ${i+1} of 2`);
+        await page.getByRole('button',{name:i===0?'Next':'Finish guide'}).click();
+      }
+      await expect(guide).toBeFocused();
+    }
     await page.setViewportSize({width:390,height:844});
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    await page.emulateMedia({reducedMotion:'reduce'});
+    await page.getByRole('button',{name:'Guide me'}).click();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('button',{name:'Guide me'})).toBeFocused();
     await page.screenshot({path:`out/browser/${name}-${mode}/mobile.png`,fullPage:true});
     expect(errors).toEqual([]);expect(requests).toEqual([]);
   });

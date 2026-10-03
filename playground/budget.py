@@ -72,16 +72,16 @@ class BudgetManager:
 
     def start_semantic(self, purpose: str) -> int:
         self.check_available()
-        if purpose not in ('generation', 'repair'):
+        if purpose not in ('generation', 'repair', 'regeneration'):
             raise ValueError('Unknown semantic purpose')
         if self.semantic_calls >= MAX_SEMANTIC_CALLS:
             raise BudgetExceeded('Semantic call budget exhausted')
         if purpose == 'generation' and self.semantic_calls:
             raise BudgetExceeded('Only one generation intent is allowed')
-        if purpose == 'repair' and (not self.semantic_calls or self.repairs >= MAX_REPAIRS):
+        if purpose in ('repair', 'regeneration') and (not self.semantic_calls or self.repairs >= MAX_REPAIRS):
             raise BudgetExceeded('Repair intent unavailable')
         self.semantic_calls += 1
-        self.repairs += int(purpose == 'repair')
+        self.repairs += int(purpose in ('repair', 'regeneration'))
         self.attempts_in_call = 0
         return self.semantic_calls
 

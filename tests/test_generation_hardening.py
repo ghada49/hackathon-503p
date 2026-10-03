@@ -45,10 +45,11 @@ def test_prompt_explicit_operand_grammar_and_authoritative_registry(candidate):
 
 def test_prompt_smallest_rubric_complete_artifact_and_visible_control_influence(candidate):
     system = prompt(candidate)
-    for instruction in ['smallest artifact', '2–3 meaningful controls', '2–3 meaningful visuals',
-                        'exactly 2 guided explorations', '2–3 focused tests', '1–3 meaningful invariants',
-                        'not hard maximums', 'Every control must influence',
-                        'displayed value or meaningful visual', 'unnecessary controls']:
+    for instruction in ['smallest scientifically sufficient', 'prefer 2–4', 'prefer 2–3',
+                        'exactly 2 guided explorations', 'Tests/invariants are optional',
+                        'Hard maximums', 'Every control must influence',
+                        'displayed value or meaningful visual', 'Omit computation-node kind and shape',
+                        'tolerance 1e-6', 'never use tolerance=1.0']:
         assert instruction in system
 
 

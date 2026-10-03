@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import copy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from pydantic import ValidationError
 
@@ -11,6 +11,7 @@ from playground.generator import (BestSoFar, GenerationFailure, OpenRouterError,
     apply_restricted_patch, generate_spec, initial_missing_schema_version, operand_grammar_locations, repair_spec)
 from playground.models import PaperMechanismIR, SourceBlock, ValidationResult, DerivedPlayground
 from playground.validation import validate_spec, derive_playground
+from playground.generation_contract import catastrophic, compact_violations
 
 PERSON2_FROZEN_SHA = 'e2de90d6a61d84e9add864d1866891f4444e1ddb'
 
@@ -35,6 +36,7 @@ class CompilationResult:
     repair_attempted: bool = False
     reason: str | None = None
     resolution: dict | None = None
+    candidates: dict = field(default_factory=dict)
 
     @property
     def status(self):
@@ -112,16 +114,63 @@ def compile_scientific_spec(client, evidence, case, *, operations=None, max_prom
     best = BestSoFar(assessment.spec if assessment.spec is not None else original, assessment.validation)
     best_derived = copy.deepcopy(assessment.derived)
     best_resolution = copy.deepcopy(resolved.metadata())
+    records = {}
+
+    def record(name, candidate, report, disposition):
+        raw = candidate.model_dump(mode='json') if hasattr(candidate, 'model_dump') else candidate
+        records[name] = dict(candidate=copy.deepcopy(raw),
+            validation=report.model_dump(mode='json') if report is not None else None,
+            disposition=disposition)
+        client.trace.log('candidates', name, dict(disposition=disposition,
+                         validation_ok=report.ok if report is not None else None))
+
+    record('initial', original, resolved.reports[0],
+           resolved.status if not resolved.actions else 'SUPERSEDED_BY_VALIDATED_CLEANUP')
+    regenerate = parse_failure is not None and catastrophic(
+        parse_failure.candidate, PaperMechanismIR.model_json_schema(), parse_failure.failures)
+    if resolved.accepted and assessment.spec is not None and not compact_violations(assessment.spec.model_dump()):
+        regenerate = False  # Preserve existing safe deterministic cleanup of extras.
+    if regenerate:
+        best_resolution['status'] = 'UNUSABLE'
     # Cleanup may shift list indices; diagnostics and patching use this same new snapshot.
     original = assessment.spec if assessment.spec is not None else original
 
     def retained(reason, *, attempted=False):
+        record('final', best.spec, best.validation, best_resolution['status'])
         return CompilationResult(copy.deepcopy(best.spec), copy.deepcopy(best.validation),
-                                 copy.deepcopy(best_derived), False, attempted, reason, copy.deepcopy(best_resolution))
+                                 copy.deepcopy(best_derived), False, attempted, reason, copy.deepcopy(best_resolution), records)
 
-    if resolved.accepted:
+    if resolved.accepted and not regenerate:
         client.trace.log('science', 'accepted', dict(validation_ok=True, frozen_sha=PERSON2_FROZEN_SHA))
-        return CompilationResult(best.spec, best.validation, best_derived, True, resolution=best_resolution)
+        record('final', best.spec, best.validation, 'FULL_SUCCESS')
+        return CompilationResult(best.spec, best.validation, best_derived, True, resolution=best_resolution, candidates=records)
+    if regenerate:
+        client.trace.log('regeneration', 'compact_regeneration', dict(reason=str(parse_failure),
+                         previous_candidate_included=False))
+        try:
+            regenerated = generate_spec(client, evidence, case, ir_model=PaperMechanismIR,
+                operations=operations, max_prompt_chars=max_prompt_chars, purpose='regeneration',
+                regeneration_reason=str(parse_failure))
+            trial = resolve_candidate(regenerated, evidence.blocks, trace=client.trace, budget=client.budget)
+            fresh = trial.assessment
+            record('regenerated', fresh.spec, fresh.validation, trial.status)
+            if trial.accepted or trial.status == 'USABLE_PARTIAL':
+                best = BestSoFar(fresh.spec, fresh.validation)
+                best_derived, best_resolution = copy.deepcopy(fresh.derived), copy.deepcopy(trial.metadata())
+                client.trace.log('regeneration', 'promoted', dict(status=trial.status))
+            else:
+                client.trace.log('regeneration', 'rejected', dict(status=trial.status, best_preserved=True))
+            if trial.accepted:
+                record('final', best.spec, best.validation, 'FULL_SUCCESS')
+                return CompilationResult(best.spec, best.validation, best_derived, True, True,
+                                         resolution=best_resolution, candidates=records)
+            return retained('Compact regeneration failed scientific/schema or rubric quality requirements', attempted=True)
+        except (GenerationFailure, OpenRouterError, BudgetExceeded, ValidationError) as exc:
+            if isinstance(exc, GenerationFailure):
+                records['regenerated'] = dict(candidate=exc.candidate, validation=dict(ok=False, failures=exc.failures),
+                                              disposition='UNUSABLE')
+            client.trace.log('regeneration', 'rejected', dict(error_type=type(exc).__name__, reason=str(exc), best_preserved=True))
+            return retained('Compact regeneration failed: ' + str(exc), attempted=client.budget.repairs > 0)
     failures = [failure.model_dump(mode='json') for failure in assessment.validation.failures] + resolved.repair_requests
     allowed = sorted({path for failure in assessment.validation.failures if failure.repairable
                       for path in failure.allowed_paths})
@@ -155,12 +204,17 @@ def compile_scientific_spec(client, evidence, case, *, operations=None, max_prom
         # Every changed candidate gets schema validation, a NEW scientific report, and new derivation.
         repaired_resolution = resolve_candidate(candidate, evidence.blocks, trace=client.trace, budget=client.budget)
         repaired = repaired_resolution.assessment
+        record('repair', repaired.spec if repaired.spec is not None else candidate, repaired.validation, repaired_resolution.status)
+        if compact_violations(candidate):
+            client.trace.log('repair', 'rejected', dict(reason='compact_contract', paths=compact_violations(candidate)))
+            return retained('Repaired candidate exceeds compact generation bounds', attempted=True)
         if repaired_resolution.accepted:
             best.consider(repaired.spec, repaired.validation, accepted=True)
             best_derived = copy.deepcopy(repaired.derived)
             client.trace.log('repair', 'accepted', dict(validation_ok=True, validation_reused_within_assessment=True))
+            record('final', best.spec, best.validation, 'FULL_SUCCESS')
             return CompilationResult(best.spec, best.validation, best_derived, True, True,
-                                     resolution=repaired_resolution.metadata())
+                                     resolution=repaired_resolution.metadata(), candidates=records)
         # A usable partial is retained only as an improvement over an unusable original.
         if best_resolution['status'] == 'UNUSABLE' and repaired_resolution.status == 'USABLE_PARTIAL':
             best = BestSoFar(repaired.spec, repaired.validation)
@@ -171,6 +225,10 @@ def compile_scientific_spec(client, evidence, case, *, operations=None, max_prom
             failures=[failure.model_dump(mode='json') for failure in repaired.validation.failures], best_preserved=True))
         return retained('Repaired candidate failed scientific/schema or rubric quality requirements', attempted=True)
     except (GenerationFailure, OpenRouterError, BudgetExceeded, ValidationError) as exc:
+        if 'repair' not in records:
+            records['repair'] = dict(candidate=getattr(exc, 'candidate', None),
+                validation=dict(ok=False, failures=getattr(exc, 'failures', [])),
+                disposition='REJECTED', error_type=type(exc).__name__)
         if isinstance(exc, GenerationFailure) and any(f.get('check') == 'repair_interface' for f in exc.failures):
             client.trace.log('repair', 'interface_rejected', dict(failures=exc.failures, best_preserved=True))
         client.trace.log('repair', 'rejected', dict(error_type=type(exc).__name__, reason=str(exc), best_preserved=True))

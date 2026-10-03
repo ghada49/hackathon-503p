@@ -45,7 +45,7 @@ def failure(path, check='schema'):
 def test_generation_fits_naive_repair_overflows_compact_repair_fits(client, authoritative_model, authoritative_candidate):
     case = Case(source_url='paper', focus='Bayesian odds', audience='students')
     source = evidence()
-    generation = build_generation_messages(case, source, authoritative_model.model_json_schema())
+    generation = build_generation_messages(case, source, authoritative_model.model_json_schema(), structured_output=True)
     limit = sum(len(m['content']) for m in generation)
     candidate = authoritative_candidate
     candidate['teaching']['title'] = ''
@@ -84,7 +84,7 @@ def test_true_budget_denial_no_semantic_call_and_keeps_best(client, authoritativ
 @pytest.mark.parametrize('path', ['evidence.0.claim', 'mechanism_grounding.0.relationship', 'computation.nodes.0.op'])
 def test_grounding_repair_preserves_relevant_source_and_omits_unrelated(client, authoritative_model, authoritative_candidate, path):
     repair_spec(client, authoritative_candidate, [failure(path, 'grounding')], [path],
-        evidence=evidence(), ir_model=authoritative_model, max_prompt_chars=5000)
+        evidence=evidence(), ir_model=authoritative_model, max_prompt_chars=6500)
     payload = json.loads(client.calls[0][1]['content'])
     assert [b['id'] for b in payload['SOURCE_BLOCKS']] == ['b_bayes_odds']
     assert payload['SOURCE_BLOCKS'][0]['text'] == evidence().blocks[0].text
@@ -140,7 +140,7 @@ def test_optional_surroundings_cannot_starve_required_grounding_evidence(authori
     source = evidence()
     source.blocks[0].text *= 10
     messages = build_repair_context(authoritative_candidate, [failure(path, 'grounding')], [path], source,
-        ir_model=authoritative_model, max_prompt_chars=5000)
+        ir_model=authoritative_model, max_prompt_chars=6500)
     payload = json.loads(messages[1]['content'])
     payload.pop('surrounding_fields')
     minimal_size = len(messages[0]['content']) + len(json.dumps(payload, ensure_ascii=False, separators=(',', ':')))
@@ -154,7 +154,7 @@ def test_reference_repair_receives_valid_identifier_vocabulary(authoritative_mod
     authoritative_candidate['computation']['nodes'][0]['inputs'][0] = {'ref': 123}
     path = 'computation.nodes.0.inputs.0.ref'
     messages = build_repair_context(authoritative_candidate, [failure(path)], [path],
-        ir_model=authoritative_model, max_prompt_chars=5000)
+        ir_model=authoritative_model, max_prompt_chars=6500)
     vocabulary = json.loads(messages[1]['content'])['reference_ids']
     assert vocabulary['controls'] == ['prior', 'likelihood_ratio']
     assert vocabulary['nodes'] == [node['id'] for node in authoritative_candidate['computation']['nodes']]
@@ -176,7 +176,7 @@ def test_grounding_context_tolerates_invalid_sibling_rows(authoritative_model, a
     authoritative_candidate['mechanism_grounding'] = malformed
     path = 'computation.nodes.0.op'
     messages = build_repair_context(authoritative_candidate, [failure(path, 'grounding')], [path], evidence(),
-        ir_model=authoritative_model, max_prompt_chars=5000)
+        ir_model=authoritative_model, max_prompt_chars=6500)
     assert json.loads(messages[1]['content'])['SOURCE_BLOCKS']
 
 
@@ -201,7 +201,7 @@ def test_fallback_missing_ids_uses_coherent_focus_region_not_unrelated_source(au
     authoritative_candidate['evidence'][0]['blocks'] = ['missing']
     path = 'evidence.0.claim'
     messages = build_repair_context(authoritative_candidate, [failure(path, 'grounding')], [path], evidence(),
-        ir_model=authoritative_model, max_prompt_chars=5000)
+        ir_model=authoritative_model, max_prompt_chars=6500)
     assert [b['id'] for b in json.loads(messages[1]['content'])['SOURCE_BLOCKS']] == ['b_bayes_odds']
 
 

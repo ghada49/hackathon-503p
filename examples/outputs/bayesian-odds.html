@@ -1,0 +1,1321 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Bayesian odds updating</title>
+  <style>:root{color-scheme:light dark;--canvas:#f8f7f2;--surface:#fffefa;--ink:#182b25;--muted:#58645d;--accent:#245548;--tint:#e9eee6;--line:#dedfd5;--error:#a33329;font:100%/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-optical-sizing:auto}
+*{box-sizing:border-box}body{margin:0;background:var(--canvas);color:var(--ink)}html{scroll-padding-top:1rem}button,input,select{font:inherit}a{color:var(--accent)}button{cursor:pointer;touch-action:manipulation}button,a,input,select{-webkit-tap-highlight-color:transparent}button:disabled,input:disabled,select:disabled{cursor:default;opacity:.65}button:active:not(:disabled){transform:scale(.97)}:focus-visible{outline:3px solid var(--accent);outline-offset:3px}[hidden]{display:none!important}
+.artifact{max-width:1200px;padding:1.6rem 2rem 2.5rem;margin:auto;min-width:0}.artifact>section{margin-bottom:1.5rem}h1,h2,h3,p{overflow-wrap:anywhere}h1{font-size:clamp(1.5rem,2.5vw,2rem);font-weight:650;line-height:1.2;letter-spacing:-.025em;margin:0 0 .45rem}h2{font-size:1.05rem;font-weight:650;line-height:1.3;margin:0 0 .7rem}h3{font-size:.85rem;font-weight:600;margin:0 0 .5rem}p{margin:.3rem 0 .7rem}.lead{font-size:.92rem;max-width:90ch;color:var(--muted);margin-bottom:0}.paper-reference{font-size:.75rem;color:var(--muted);margin:.2rem 0 .4rem}.eyebrow{font-size:.65rem;font-weight:650;letter-spacing:.09em;text-transform:uppercase;color:var(--accent);margin:0 0 .65rem}.section-heading{display:flex;align-items:center;justify-content:space-between;gap:.8rem;margin-bottom:.65rem}.section-heading h2{margin:0}.quiet-button{background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:.4rem .7rem;min-height:44px;font-size:.76rem;white-space:nowrap}.quiet-button:hover{background:var(--tint)}.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:1rem;min-width:0}.workbench{display:grid;grid-template-columns:minmax(240px,.7fr) minmax(0,1.7fr);gap:.8rem;align-items:start}.control{margin:0 0 .85rem;min-width:0}.control:last-child{margin-bottom:0}.control-head{display:flex;align-items:center;justify-content:space-between;gap:.5rem;font-size:.8rem;margin-bottom:.25rem}.control-head label{font-weight:600}.control-help{font-size:.7rem;line-height:1.4;color:var(--muted);margin:.25rem 0 0}.control-value{font: .75rem ui-monospace,SFMono-Regular,Consolas,monospace;background:var(--tint);padding:.15rem .35rem;border-radius:4px}.control input[type=range]{width:100%;height:30px;accent-color:var(--accent);cursor:pointer}.control input[type=checkbox]{width:1.2rem;height:1.2rem;accent-color:var(--accent);flex-shrink:0}.control input[type=number],.control select{width:100%;max-width:100%;min-width:0;min-height:44px;border:1px solid var(--line);border-radius:4px;background:var(--surface);color:var(--ink);padding:.3rem .4rem}.matrix-editor{display:grid;gap:3px;overflow:auto;padding:2px}.matrix-editor input[type=number]{text-align:center;font: .8rem ui-monospace,SFMono-Regular,Consolas,monospace;min-width:2.6rem;padding:.25rem .1rem;appearance:textfield}.matrix-editor input::-webkit-inner-spin-button{appearance:none}.range-bounds{display:flex;justify-content:space-between;font-size:.65rem;color:var(--muted)}.control-disclosure{margin:.6rem 0}.control-disclosure>summary{cursor:pointer;min-height:44px;display:flex;align-items:center;gap:.3rem;font-size:.8rem;font-weight:600}.control-disclosure>summary::before{content:'▸';color:var(--muted)}.control-disclosure[open]>summary::before{content:'▾'}.control-disclosure[open]>summary{display:none}.tabs{display:flex;gap:.3rem;overflow:auto;margin-bottom:.7rem;border-bottom:1px solid var(--line)}.tab{border:0;border-bottom:2px solid transparent;background:transparent;color:var(--muted);padding:.4rem .6rem;font-size:.72rem;min-height:44px;white-space:nowrap}.tab[aria-selected=true]{border-bottom-color:var(--accent);color:var(--accent);font-weight:600}.tab:hover{background:var(--tint)}#main-visual{min-height:190px;display:flex;align-items:center;justify-content:center;overflow:auto}.visual-caption,.hint{font-size:.72rem;color:var(--muted);margin:.45rem 0 0}.data-table{border-collapse:separate;border-spacing:3px;font: .8rem ui-monospace,SFMono-Regular,Consolas,monospace;margin:auto}.data-table caption{font:600 .75rem/1.4 system-ui;text-align:left;margin-bottom:.5rem}.data-table th{font:400 .65rem system-ui;color:var(--muted);padding:.2rem}.data-table td{min-width:2.8rem;text-align:center;padding:.6rem .5rem;background:var(--tint);border-radius:3px}.heatmap-wrap{width:100%;overflow:auto}.heatmap-key{display:flex;justify-content:center;align-items:center;gap:.5rem;font-size:.65rem;color:var(--muted);margin-top:.5rem}.heatmap-key i{width:90px;height:6px;border-radius:5px;background:linear-gradient(90deg,#edf3e7,#245548)}.formula-strip{background:var(--tint);border-inline-start:3px solid var(--accent);padding:.65rem .9rem;border-radius:0 5px 5px 0;margin-top:.7rem}.formula-strip .eyebrow{margin-bottom:.2rem}.formula-strip p,.formula{font: .95rem/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;margin:0;overflow-wrap:anywhere}.intermediate-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:.6rem}.intermediate-card{overflow:auto}.intermediate-card h3{font-size:.73rem}.intermediate-card .data-table{font-size:.7rem}.intermediate-card .data-table td{padding:.4rem .3rem;min-width:2rem}.intermediate-card .big-value{font-size:1.6rem}.dependencies{font-size:.75rem;margin-top:.6rem}.dependencies summary{cursor:pointer;padding:.4rem 0;color:var(--muted)}.pipeline{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;padding:.4rem 0}.pipeline-node{background:var(--tint);border:1px solid var(--line);padding:.4rem .6rem;border-radius:5px;font-size:.7rem;max-width:100%;overflow-wrap:anywhere}.pipeline-node.affected{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}.pipeline-arrow{color:var(--muted)}.change-panel{display:flex;gap:.7rem;background:var(--tint);padding:.9rem 1rem;border-radius:6px}.change-icon{font-size:1.4rem;color:var(--accent)}.change-panel h3{font-size:.8rem}.change-panel p{font-size:.8rem;color:var(--muted);margin:0}.exploration-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.7rem}.exploration-card{display:flex;flex-direction:column}.exploration-header{display:flex;align-items:center;gap:.6rem}.exploration-number{background:var(--accent);color:var(--surface);display:grid;place-items:center;width:1.5rem;height:1.5rem;flex-shrink:0;border-radius:4px;font-size:.68rem}.exploration-header h3{margin:0;font-size:.9rem}.exploration-card p{font-size:.8rem;color:var(--muted)}.exploration-card h4{font-size:.72rem;margin:.5rem 0 .15rem}.exploration-card .quiet-button{align-self:start;margin-top:.5rem}.support-grid,.source-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1.5rem}.support-grid,.limitation,#source{border-top:1px solid var(--line);padding-top:1rem;font-size:.8rem;color:var(--muted)}.support-grid h2,.limitation h2,#source h2{color:var(--ink);font-size:.9rem}.support-grid h3{color:var(--ink)}dl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:.3rem .8rem;font-size:.78rem;margin:.5rem 0}dt{font-family:ui-monospace,Consolas,monospace;color:var(--ink)}dd{margin:0;color:var(--muted)}.source-card{display:flex;justify-content:space-between;gap:1rem;margin-bottom:.8rem}.source-card p{font-size:.75rem}.source-grid h3{color:var(--ink)}.source-grid ul{padding-left:1rem;margin:.5rem 0}.source-grid li{margin:.3rem 0}.evidence-ref{display:block;font-size:.65rem;margin-top:.2rem}.chart{width:100%;max-height:220px;color:var(--accent)}.chart text{font:12px system-ui;fill:var(--muted)}.big-value{font:500 2rem/1.3 ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:-.035em}.error{border:1px solid var(--error);color:var(--error);background:var(--surface);padding:.75rem;border-radius:6px;font-size:.8rem;margin-bottom:.7rem}.skip-link{position:fixed;top:-5rem;left:1rem;z-index:10;background:var(--surface);padding:1rem}.skip-link:focus{top:1rem}
+@media(max-width:700px){.artifact{padding:.8rem .8rem 1.5rem}.artifact>section{margin-bottom:1.1rem}.workbench{grid-template-columns:minmax(0,1fr)}.panel{padding:.65rem}.section-heading{flex-wrap:wrap;gap:.3rem}.section-heading h2{font-size:.85rem}.lead{font-size:.83rem;line-height:1.45}h1{font-size:1.4rem}.control-help{display:none}.control{margin-bottom:.5rem}.control-disclosure[open]>summary{display:flex}.tabs{margin-bottom:.35rem}.data-table td{padding:.45rem .35rem}.support-grid,.source-grid,.exploration-grid{grid-template-columns:minmax(0,1fr);gap:.7rem}.source-card{flex-wrap:wrap}.chart{max-height:190px}#main-visual{min-height:150px}.visual-caption{font-size:.65rem}.formula-strip{padding:.5rem .65rem}}
+@media(prefers-color-scheme:dark){:root{--canvas:#151d19;--surface:#1e2822;--ink:#eff2e9;--muted:#b1bdb2;--accent:#a8d1b9;--tint:#2a3930;--line:#46584b;--error:#ffafa0}.exploration-number{color:var(--canvas)}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}button:active:not(:disabled){transform:none}}
+@media(prefers-contrast:more){:root{--muted:var(--ink);--line:var(--ink)}}
+.control-head:has(input[type=checkbox]){min-height:44px}.control-head:has(input[type=checkbox]) label{display:flex;align-items:center;min-height:44px;flex:1}
+.experience-component>.experience-visual .data-table caption{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+
+/* Trusted layout vocabulary: experience data never supplies CSS. */
+.pipeline-node{overflow-wrap:anywhere}
+.primary-component{border-color:var(--accent);background:var(--surface)}
+.primary-visual{min-height:160px;display:grid;align-content:center}
+.primary-visual .chart{max-height:260px}
+.emphasized-node{border-inline-start:3px solid var(--accent)}
+.calculation-sequence>.intermediate-card{position:relative;min-width:0}
+.calculation-sequence .data-table{max-width:100%}
+.calculation-arrow{display:block;color:var(--accent);font-size:1.2rem;line-height:1;margin-bottom:.4rem}
+.changed-node{border-color:var(--accent)}
+.value-change{font-size:.7rem;color:var(--muted);overflow-wrap:anywhere}
+.guided-dependency{box-shadow:inset 0 0 0 2px var(--accent)}
+.annotation-warning{border-inline-start-color:var(--error)}
+.source-excerpt{border:1px solid var(--line);padding:.8rem;border-radius:6px;margin-top:.7rem}
+.source-excerpt p{white-space:pre-wrap;overflow-wrap:anywhere;margin:.3rem 0}
+.pipeline-node{max-width:100%}
+.stage-actions,.guide-actions{display:flex;flex-wrap:wrap;gap:.5rem}
+.experience-layout{display:grid;gap:.7rem;align-items:start;min-width:0}
+.layout-split{grid-template-columns:minmax(0,2fr) minmax(0,3fr)}
+.layout-split[data-ratio="50/50"]{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.layout-split[data-ratio="60/40"]{grid-template-columns:minmax(0,3fr) minmax(0,2fr)}
+.layout-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.layout-grid[data-columns="1"]{grid-template-columns:minmax(0,1fr)}
+.layout-grid[data-columns="3"]{grid-template-columns:repeat(3,minmax(0,1fr))}
+.layout-stack,.layout-visual_first,.layout-equation_first,.layout-pipeline,.layout-focus{grid-template-columns:minmax(0,1fr)}
+.layout-focus>.experience-component:first-child{border-color:var(--accent)}
+.layout-pipeline{border-inline-start:2px solid var(--line);padding-inline-start:1.2rem}
+.experience-component,.experience-visual{min-width:0;overflow:auto}
+.experience-visual{padding:.2rem}
+.experience-stage.density-focused{max-width:100%;margin-inline:auto}
+.experience-stage.density-compact .experience-component{padding:1rem}
+.experience-controls .control:last-child{margin-bottom:0}
+.experience-controls .control:first-of-type{margin-top:.4rem}
+.experience-summary{margin-top:.7rem;overflow:auto;padding:.6rem 1rem;display:flex;align-items:center;justify-content:space-between;gap:1rem}
+.experience-summary .big-value{font-size:1.8rem}
+.experience-summary.emphasis-relationship{border-inline-start:3px solid var(--accent)}
+.experience-callout{margin-top:.8rem;border-inline-start:3px solid var(--accent);font-size:.85rem;box-shadow:none;background:var(--tint)}
+.experience-callout p{margin:0;overflow-wrap:anywhere}
+.calculation-annotation{font-size:.78rem;color:var(--muted);margin:1rem 0 0}
+.guide-panel{position:fixed;bottom:1rem;inset-inline:1rem;max-width:58rem;margin-inline:auto;z-index:8;max-height:45vh;overflow:auto;display:flex;flex-wrap:wrap;gap:1rem;align-items:center;justify-content:space-between;border-color:var(--accent);box-shadow:0 8px 40px #182b2526}
+.guide-active{padding-bottom:12rem}
+.guide-panel p{margin:0}.guide-panel #guide-message{font-size:.88rem;max-width:55ch}
+#guide-visual{flex-basis:100%;min-width:0}
+.guide-target{outline:3px solid var(--accent);outline-offset:5px;scroll-margin:7rem}
+.change-content{width:100%;min-width:0}
+#change-path{display:grid;gap:.5rem;margin-top:1rem}
+#change-path:empty{display:none}
+.delta-step{display:grid;gap:.2rem;padding:.7rem 1rem;border-inline-start:2px solid var(--accent);background:var(--surface);border-radius:0 6px 6px 0;font-size:.8rem}
+.delta-step span,.delta-step small{color:var(--muted);font-variant-numeric:tabular-nums}
+.before-after-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}
+.before-after-grid>div{min-width:0;overflow:auto}
+.before-after-grid .data-table td{min-width:2rem;padding:.5rem .3rem}
+#before-after{margin-top:1rem;font-size:.8rem}#before-after summary{cursor:pointer;padding:.5rem 0}
+@media(max-width:700px){.layout-split,.layout-split[data-ratio],.layout-grid[data-columns="3"],.before-after-grid{grid-template-columns:minmax(0,1fr)}.layout-grid[data-columns="2"]{grid-template-columns:repeat(2,minmax(0,1fr))}.guide-panel{align-items:start}.guide-actions{width:100%}.guide-actions button{flex:1}.layout-pipeline{padding-inline-start:.7rem}.experience-component{padding:.65rem}.experience-controls .control:first-of-type{margin-top:0}.experience-visual{padding:0}.experience-visual .data-table td{min-width:2rem;padding:.45rem .25rem;font-size:.7rem}}
+@media(prefers-reduced-motion:no-preference){.guide-target{transition:outline-color 120ms ease}.experience-callout{animation:callout-arrive 140ms ease-out}@keyframes callout-arrive{from{opacity:.3}to{opacity:1}}}
+
+/* Reference-inspired scientific notebook. All presentation is trusted CSS. */
+:root{--canvas:#faf9f5;--surface:#fffefa;--ink:#193e34;--muted:#536762;--accent:#245548;--tint:#eff2eb;--line:#e5e8df;--shadow:0 5px 24px #233e2f04;--serif:Georgia,"Times New Roman",serif}
+body{background:radial-gradient(ellipse at 50% 0,#fffefa 0,transparent 65%),var(--canvas)}
+.artifact{max-width:1160px;padding:1.2rem 2rem 3rem}
+.artifact>section{margin-bottom:1rem}
+.artifact h1{font-family:var(--serif);font-size:clamp(1.7rem,2.6vw,2.35rem);font-weight:500;letter-spacing:-.04em;line-height:1.15;margin-bottom:.65rem}
+.artifact h2{font-family:var(--serif);font-size:1.45rem;font-weight:500;letter-spacing:-.035em}
+.overview{position:relative;padding:.3rem 1.25rem .55rem}
+.lead{max-width:88ch;font-size:.9rem;line-height:1.5}
+.paper-reference{display:inline-flex;border:1px solid var(--line);border-radius:99px;padding:.3rem .7rem;font-size:.68rem}
+.artifact>#playground,.artifact>#intermediates,.artifact>#explorations,.artifact>#limitations,.artifact>#source{background:var(--surface);border:1px solid #e5e8df80;border-radius:18px;padding:1.2rem;box-shadow:var(--shadow)}
+.section-heading{justify-content:start;align-items:center;gap:.85rem;margin-bottom:.8rem}
+.section-intro{flex:1;min-width:0}
+.section-intro h2{margin:0}
+.section-intro p{font-size:.76rem;line-height:1.4;color:var(--muted);margin:.25rem 0 0}
+.section-number,.exploration-number{width:2rem;height:2rem;flex-shrink:0;border-radius:50%;background:linear-gradient(125deg,#326454,#183e33);color:#fffefa;display:grid;place-items:center;font:500 .85rem/1 system-ui;box-shadow:inset 0 0 0 1px #ffffff12}
+.stage-actions{margin-left:auto}
+.quiet-button{border-radius:99px;min-height:44px;padding:.45rem .9rem;background:var(--surface);font-size:.75rem}
+.quiet-button:hover{border-color:#9aac9f;background:var(--tint)}
+.artifact .panel{border-radius:13px;border-color:var(--line);box-shadow:none}
+.teaching-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.8rem;padding:0 .9rem}
+.summary-card{display:flex;align-items:flex-start;gap:.8rem;background:var(--surface);border:1px solid #e5e8df80;border-radius:16px;padding:.8rem;min-width:0;box-shadow:var(--shadow)}
+.summary-card>div{min-width:0;flex:1}
+.summary-card h2{font:650 .8rem/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:0;margin:0 0 .35rem}
+.summary-card p{font-size:.74rem;line-height:1.5;color:var(--muted);margin:0}
+.summary-icon{display:grid;place-items:center;width:2.4rem;height:2.4rem;flex-shrink:0;background:#eaf0e7;color:var(--accent);border-radius:50%}
+.summary-icon svg{width:1.4rem;height:1.4rem;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.summary-card dl{font-size:.69rem;line-height:1.4;gap:.25rem .6rem;margin:0}
+.summary-card dt{font-weight:600}
+.artifact dd,.artifact li,.artifact .evidence-ref{overflow-wrap:anywhere}
+.artifact dt{overflow-wrap:anywhere;min-width:0}
+.artifact dl{grid-template-columns:fit-content(35%) minmax(0,1fr)}
+.experience-visual,.before-after-grid>div,.intermediate-card{min-width:0;max-width:100%}
+.experience-visual,.heatmap-wrap,.calculation-sequence>.intermediate-card{overflow-x:auto}
+.heatmap-wrap{min-width:0;max-width:100%}
+#main-visual{justify-content:safe center}
+.artifact #source h2{font-family:var(--serif);font-size:1.45rem}
+.control-shape{font-size:.7rem;font-weight:400;color:var(--muted);white-space:nowrap}
+.matrix-axis{display:flex;align-items:center;justify-content:center;min-height:1.1rem;font-size:.65rem;color:var(--muted)}
+.matrix-editor{max-width:18rem;margin-inline:auto;gap:4px}
+.control[data-control-kind=matrix_editor] .matrix-editor{max-width:12rem}
+.control input[type=number],.control select{border-radius:6px;border-color:#dde3db;background:var(--surface);font-variant-numeric:tabular-nums}
+.control input[type=number]:hover{border-color:#99aca1}
+.control input[type=checkbox]{appearance:none;width:2.6rem;height:1.5rem;border:1px solid #a4b4a9;border-radius:99px;background:#dce3da;position:relative;cursor:pointer}
+.control input[type=checkbox]::before{content:"";position:absolute;top:2px;left:2px;width:1.1rem;height:1.1rem;border-radius:50%;background:#fff;box-shadow:0 1px 3px #153b3330;transition:transform 140ms ease-out}
+.control input[type=checkbox]:checked{background:var(--accent);border-color:var(--accent)}
+.control input[type=checkbox]:checked::before{transform:translateX(1.1rem)}
+.control-head:has(input[type=checkbox]){flex-direction:row-reverse;justify-content:flex-end}
+.control-head:has(input[type=checkbox]) label{flex:initial;font-weight:500}
+.layout-stack>.experience-component:has(>.experience-controls){padding:0;border:0;background:none}
+.layout-stack>.experience-component:has(>.experience-controls)>h3{display:none}
+.layout-stack>.experience-component>.experience-controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.75rem;align-items:start}
+.layout-stack>.experience-component>.experience-controls>.control-disclosure{margin:0}
+.layout-stack>.experience-component>.experience-controls [data-control-kind=matrix_editor].control{padding:.55rem 1rem;border:1px solid var(--line);border-radius:13px;margin:0}
+.layout-stack>.experience-component>.experience-controls>.control:not([data-control-kind=matrix_editor]),.layout-stack>.experience-component>.experience-controls>.control-disclosure:not([data-control-kind=matrix_editor]){grid-column:1/-1}
+.layout-stack>.experience-component>.experience-controls .control-help{display:none}
+.layout-stack>.experience-component>.experience-controls .control-head{margin-bottom:.4rem}
+.layout-stack>.experience-component>.experience-controls .control-head:has(input[type=checkbox]){margin:0}
+.experience-layout{gap:.85rem}
+.primary-component{border-color:#b7c8ba;background:linear-gradient(140deg,var(--surface),#f4f7f0)}
+.primary-visual{min-height:155px}
+.primary-visual .data-table td{min-width:4.5rem;padding:.75rem 1rem;font-size:.85rem}
+.primary-visual .heatmap-key{margin-top:.65rem}
+.experience-component h3{font-size:.8rem;line-height:1.4}
+.data-table{border-spacing:4px}
+.data-table td{background:#f5f7f2;border:1px solid #e2e8df;border-radius:4px}
+.data-table.heatmap td{border-color:transparent}
+.heatmap-key i{height:7px;width:110px}
+.tabs{border:0;padding:.2rem;background:var(--tint);border-radius:99px;gap:.2rem}
+.tab{border:0;border-radius:99px;font-size:.72rem}
+.tab[aria-selected=true]{background:var(--accent);color:var(--surface);font-weight:500}
+.formula-strip{border:0;border-radius:10px;padding:.7rem 1rem;background:var(--tint)}
+.intermediate-grid{gap:1.2rem;counter-reset:stage}
+.intermediate-card{counter-increment:stage;padding:1rem .8rem!important}
+.intermediate-card h3{font-size:.76rem;line-height:1.45;min-height:2.2em}
+.intermediate-card h3::before{content:counter(stage) ". ";color:var(--accent)}
+.intermediate-card .data-table caption{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.calculation-sequence>.intermediate-card{overflow:auto}
+.intermediate-card>.heatmap-wrap,.intermediate-card>.experience-visual{overflow:auto}
+.calculation-arrow{position:absolute;left:-1.15rem;top:50%;font-size:1rem;margin:0}
+.calculation-annotation{font-size:.72rem;line-height:1.5;margin:.7rem 0 0}
+.artifact>.change-panel{margin-top:-.35rem;border:1px solid #e5e8df80;border-radius:14px;padding:1rem 1.2rem;background:var(--tint)}
+.change-icon{width:2.2rem;height:2.2rem;display:grid;place-items:center;flex-shrink:0;border-radius:50%;background:#e0e9de;font-size:1.25rem}
+.change-panel h3{font-size:.83rem}
+.change-panel p{font-size:.78rem;line-height:1.6}
+.exploration-number{width:1.8rem;height:1.8rem;font-size:.75rem}
+.exploration-header h3{font-size:.84rem}
+.exploration-description{grid-template-columns:4rem minmax(0,1fr);font-size:.76rem;line-height:1.55;gap:.65rem 1rem;margin:.9rem 0}
+.exploration-description dt{font-family:inherit;font-weight:600}
+.exploration-description dd{font-size:inherit}
+.exploration-card .quiet-button{margin-top:auto;align-self:flex-start}
+.source-grid{gap:1rem}
+.source-grid>div{background:var(--tint);border-radius:10px;padding:1rem}
+.source-grid h3{font-size:.78rem}
+.source-grid li,.limitation p{font-size:.77rem;line-height:1.6}
+.source-card{margin-left:2.8rem}
+.limitation>p{margin-left:2.8rem}
+@media(max-width:700px){
+  .artifact{padding:.8rem .65rem 1.5rem}.artifact>section{margin-bottom:.8rem}
+  .overview{padding:.2rem .25rem .3rem}.artifact h1{font-size:1.6rem;margin-bottom:.5rem}.lead{font-size:.8rem;line-height:1.45}
+  .artifact>#playground,.artifact>#intermediates,.artifact>#explorations,.artifact>#limitations,.artifact>#source{padding:.75rem;border-radius:14px}
+  .section-heading{gap:.5rem;margin-bottom:.7rem;align-items:flex-start}.section-number{width:1.6rem;height:1.6rem;font-size:.72rem}
+  .artifact h2,.artifact #source h2{font-size:1.05rem}.section-intro p{font-size:.68rem}.stage-actions{margin-left:2.1rem;gap:.35rem;width:calc(100% - 2.1rem)}
+  #playground>.section-heading .section-intro p{display:none}
+  .heading-detail{display:none}
+  #playground>.section-heading .stage-actions{width:auto;margin-left:auto}
+  .control-panel>.eyebrow{display:none}
+  #main-visual{min-height:130px}
+  .quiet-button{font-size:.7rem;padding:.35rem .7rem}
+  .teaching-summary{grid-template-columns:minmax(0,1fr);padding:0;gap:.6rem}.summary-card{padding:.85rem}.summary-card h2{font-size:.82rem}.summary-card p,.summary-card dl{font-size:.76rem}
+  .summary-icon{width:32px;height:32px}.summary-icon svg{width:20px;height:20px}
+  .artifact .panel{padding:.65rem}.experience-layout{gap:.6rem}
+  .layout-stack>.experience-component>.experience-controls{grid-template-columns:minmax(0,1fr);gap:.15rem}
+  .layout-stack>.experience-component>.experience-controls [data-control-kind=matrix_editor].control{padding:.3rem .4rem;border:0}
+  .control[data-control-kind=matrix_editor] .matrix-editor{max-width:13rem}.matrix-axis{min-height:.8rem;font-size:.6rem}
+  .control-shape{font-size:.65rem}.control-head{font-size:.75rem}.control-disclosure>summary{font-size:.75rem}
+  .primary-visual{min-height:125px}.primary-visual .data-table td{min-width:2.3rem;padding:.5rem .3rem;font-size:.72rem}
+  .experience-component h3{font-size:.73rem}.data-table{border-spacing:3px}
+  .intermediate-grid{gap:.85rem}.calculation-arrow{top:-.8rem;left:50%;transform:rotate(90deg)}
+  .intermediate-card h3{min-height:0}.exploration-description{grid-template-columns:3.4rem minmax(0,1fr);gap:.6rem}
+  .source-card,.limitation>p{margin-left:0}.source-grid>div{padding:.8rem}
+}
+@media(prefers-color-scheme:dark){
+  :root{--canvas:#151d19;--surface:#1e2822;--ink:#eff2e9;--muted:#b1bdb2;--accent:#a8d1b9;--tint:#2a3930;--line:#46584b;--shadow:none}
+  body{background:var(--canvas)}.primary-component{background:var(--surface);border-color:var(--accent)}
+  .summary-icon,.change-icon{background:var(--tint)}.data-table td{background:var(--tint);border-color:var(--line)}
+  .artifact>#playground,.artifact>#intermediates,.artifact>#explorations,.artifact>#limitations,.artifact>#source,.summary-card,.artifact>.change-panel{border-color:var(--line)}
+  .control input[type=number],.control select{border-color:var(--line)}.tab[aria-selected=true]{color:var(--canvas)}
+  .control input[type=checkbox]:checked::before{background:var(--canvas)}
+}
+@media(prefers-contrast:more){:root{--muted:var(--ink);--line:var(--ink)}.summary-card{border-color:var(--line)}}
+</style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to explanation</a>
+    <main id="main" class="artifact">
+      <section id="overview" class="overview">
+        <h1 id="concept-title">Bayesian odds updating</h1>
+        <p class="paper-reference" id="paper-label" hidden></p>
+        <p class="lead" id="idea"></p>
+      </section>
+      <section id="context" class="teaching-summary" aria-label="Concept at a glance">
+        <article class="summary-card"><span class="summary-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 18h6m-5 3h4M8 14a7 7 0 1 1 8 0c-1 .8-1 2-1 3H9c0-1 0-2.2-1-3Z"/></svg></span><div><h2>Idea</h2><p id="mental-model"></p></div></article>
+        <article class="summary-card"><span class="summary-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 19v-6m5 6V8m5 11V4m5 15V10"/></svg></span><div><h2>Why it matters</h2><p id="why"></p></div></article>
+        <article class="summary-card"><span class="summary-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v15m0-15C8 2 3 4 3 4v15s5-2 9 1c4-3 9-1 9-1V4s-5-2-9 1Z"/></svg></span><div><h2>Main symbols</h2><dl id="symbols"></dl></div></article>
+      </section>
+      <section id="playground">
+        <div class="section-heading"><span class="section-number" aria-hidden="true">1</span><div class="section-intro"><h2>Try it<span class="heading-detail"> — edit the inputs</span></h2><p>Make a change and see the results update.</p></div><div class="stage-actions"><button id="guide-start" class="quiet-button" hidden>Guide me →</button><button id="reset" class="quiet-button">↺ Reset values</button></div></div>
+        <div id="guided-walkthrough" class="panel guide-panel" hidden aria-label="Guided walkthrough">
+          <div><p class="eyebrow" id="guide-progress"></p><p id="guide-message" role="status" aria-live="polite"></p></div>
+          <div class="guide-actions"><button id="guide-back" class="quiet-button">Back</button><button id="guide-next" class="quiet-button">Next →</button><button id="guide-end" class="quiet-button">End guide</button></div>
+          <div id="guide-visual" hidden></div>
+        </div>
+        <div id="runtime-error" role="alert" class="error" hidden></div>
+        <div class="workbench" id="canonical-stage">
+          <div class="panel control-panel"><h3 class="eyebrow">Try it</h3><div id="controls"></div></div>
+          <div class="panel visual-panel"><h3 class="eyebrow">What happens</h3><div id="visual-tabs" class="tabs" role="tablist" aria-label="Visualization"></div><div id="main-visual" role="tabpanel" tabindex="0"></div><p class="visual-caption" id="visual-caption"></p></div>
+        </div>
+        <div id="experience-stage" hidden></div>
+        <div id="experience-summary" hidden></div>
+        <p id="presentation-status" class="hint" hidden>Reference values · editing is unavailable in this preview.</p>
+        <div id="experience-annotations" hidden></div>
+        <div class="formula-strip" id="formula-strip" hidden><span class="eyebrow">The relationship</span><p id="formula"></p></div>
+      </section>
+      <section id="intermediates"><div class="section-heading"><span class="section-number" aria-hidden="true">2</span><div class="section-intro"><h2>Follow the computation</h2><p>See how the inputs become the result, step by step.</p></div></div><div id="intermediate-values" class="intermediate-grid"></div><details class="dependencies"><summary>Show the dependency path</summary><div id="dependency-graph"></div></details></section>
+      <section id="changes" class="change-panel"><span class="change-icon" aria-hidden="true">↳</span><div class="change-content"><h3>What changed?</h3><p id="change-summary" role="status" aria-live="polite">Adjust a control to compare the result with its previous value.</p><div id="change-path"></div><details id="before-after" hidden><summary>Compare before and after</summary><div id="before-after-values" class="before-after-grid"></div></details></div></section>
+      <section id="explorations"><div class="section-heading"><span class="section-number" aria-hidden="true">3</span><div class="section-intro"><h2>Guided explorations</h2><p>Try a setup, observe what changes, and understand why.</p></div></div><div id="exploration-cards" class="exploration-grid"></div></section>
+      <section id="limitations" class="limitation"><div class="section-heading"><span class="section-number" aria-hidden="true">4</span><div class="section-intro"><h2 id="limitation-title">Limitations & assumptions</h2></div></div><p id="limitation-text"></p></section>
+      <section id="source"><div class="section-heading"><span class="section-number" aria-hidden="true">5</span><div class="section-intro"><h2>Source grounding</h2></div></div><div class="source-card" id="source-card"></div><div class="source-grid"><div><h3>Supported by the paper</h3><ul id="evidence"></ul></div><div><h3>For learning · simplifications</h3><ul id="simplifications"></ul></div></div><div id="source-excerpts"></div></section>
+    </main>
+  <noscript><p class="error">Enable JavaScript to use this interactive explanation.</p></noscript>
+  <script type="application/json" id="playground-data">{"ir": {"schema_version": "1.0", "teaching": {"title": "Bayesian odds updating", "idea": "Update belief in a binary hypothesis by multiplying prior odds by the likelihood ratio, then converting back to probability.", "why": "This shows how evidence strength L changes belief without confusing odds and probability.", "mental_model": "Prior odds are a scale; likelihood ratio is a multiplier; posterior odds are the scaled result; probability is a normalized readout of those odds."}, "evidence": [{"id": "ev_prior_odds", "claim": "Prior odds are p/(1-p).", "blocks": ["b0000"]}, {"id": "ev_posterior_odds", "claim": "Posterior odds are L times prior odds.", "blocks": ["b0000"]}, {"id": "ev_posterior_prob", "claim": "Posterior probability is (L*p)/(1-p+L*p).", "blocks": ["b0000"]}, {"id": "ev_neutral", "claim": "L=1 leaves the prior unchanged.", "blocks": ["b0000"]}], "provenance": {"simplifications": ["Single evidence update only; dependent or sequential evidence is not modeled."], "toy_examples": ["Default p=0.3 and L=2 are illustrative, not experimental measurements."]}, "symbols": [{"symbol": "p", "meaning": "Prior probability of H", "kind": "scalar", "units": null}, {"symbol": "L", "meaning": "Likelihood ratio P(E|H)/P(E|not H)", "kind": "scalar", "units": null}, {"symbol": "o_prior", "meaning": "Prior odds p/(1-p)", "kind": "scalar", "units": null}, {"symbol": "o_post", "meaning": "Posterior odds L * o_prior", "kind": "scalar", "units": null}, {"symbol": "P(H|E)", "meaning": "Posterior probability", "kind": "scalar", "units": null}], "controls": [{"id": "prior_prob", "type": "slider", "label": "Prior probability p", "help": null, "value_kind": "scalar", "default": 0.3, "min": 0.01, "max": 0.99, "step": 0.01, "options": null, "shape": null}, {"id": "likelihood_ratio", "type": "slider", "label": "Likelihood ratio L", "help": null, "value_kind": "scalar", "default": 2, "min": 0.1, "max": 10.0, "step": 0.1, "options": null, "shape": null}], "computation": {"nodes": [{"op": "subtract", "inputs": [{"const": 1}, {"ref": "prior_prob"}], "params": {}, "id": "one_minus_p", "kind": null, "shape": null, "display": false, "label": null, "format": null}, {"op": "divide", "inputs": [{"ref": "prior_prob"}, {"ref": "one_minus_p"}], "params": {}, "id": "prior_odds", "kind": null, "shape": null, "display": true, "label": "Prior odds", "format": null}, {"op": "multiply", "inputs": [{"ref": "likelihood_ratio"}, {"ref": "prior_odds"}], "params": {}, "id": "posterior_odds", "kind": null, "shape": null, "display": true, "label": "Posterior odds", "format": null}, {"op": "add", "inputs": [{"const": 1}, {"ref": "posterior_odds"}], "params": {}, "id": "one_plus_post_odds", "kind": null, "shape": null, "display": false, "label": null, "format": null}, {"op": "divide", "inputs": [{"ref": "posterior_odds"}, {"ref": "one_plus_post_odds"}], "params": {}, "id": "posterior_prob", "kind": null, "shape": null, "display": true, "label": "Posterior probability", "format": null}, {"op": "concat", "inputs": [{"ref": "prior_prob"}, {"ref": "posterior_prob"}], "params": {"axis": 0, "promote_scalars": true}, "id": "prior_vs_posterior", "kind": null, "shape": null, "display": true, "label": "Prior vs posterior vector", "format": null}], "outputs": ["posterior_prob", "prior_vs_posterior"]}, "mechanism_grounding": [{"nodes": ["prior_odds"], "blocks": ["b0000"], "relationship": "Computes prior odds p/(1-p) as described."}, {"nodes": ["posterior_odds"], "blocks": ["b0000"], "relationship": "Multiplies likelihood ratio L by prior odds to get posterior odds."}, {"nodes": ["posterior_prob"], "blocks": ["b0000"], "relationship": "Converts posterior odds to posterior probability via o/(1+o)."}], "visuals": [{"type": "number", "id": "posterior_number", "title": "Posterior probability P(H|E)", "value": "posterior_prob", "bindings": {}, "options": {}}, {"type": "bar_chart", "id": "prior_posterior_chart", "title": "Prior vs posterior probability", "value": "prior_vs_posterior", "bindings": {}, "options": {"display": "Prior vs posterior probability"}}], "explorations": [{"title": "Neutral evidence", "change": {"instructions": "Set likelihood ratio L to 1.", "suggested_values": {"likelihood_ratio": 1}}, "observe": "Posterior probability equals prior probability.", "why": "When L=1, posterior odds equal prior odds, so belief is unchanged.", "expectation": null}, {"title": "Evidence favoring H", "change": {"instructions": "Set likelihood ratio L to 5.", "suggested_values": {"likelihood_ratio": 5}}, "observe": "Posterior probability is greater than prior probability.", "why": "L\u003e1 multiplies prior odds upward, increasing posterior probability.", "expectation": null}], "limitation": {"kind": "limitation", "text": "Only one evidence update is modeled; dependent or sequential evidence is not represented."}, "tests": [], "invariants": []}, "values": {"prior_prob": 0.3, "likelihood_ratio": 2, "one_minus_p": 0.7, "prior_odds": 0.4285714285714286, "posterior_odds": 0.8571428571428572, "one_plus_post_odds": 1.8571428571428572, "posterior_prob": 0.46153846153846156, "prior_vs_posterior": [0.3, 0.46153846153846156]}, "source": {"url": "../sources/bayesian-odds.txt", "blocks": [{"id": "b0000", "type": "paragraph", "text": "Project-authored teaching note. A binary hypothesis H has prior probability p with 0 \u003c p \u003c 1. Its prior odds are p/(1-p). Evidence E contributes likelihood ratio L = P(E|H)/P(E|not H), where L is positive. Posterior odds are L times prior odds. Converting odds o back to probability gives o/(1+o). The resulting posterior probability is (L*p)/(1-p+L*p). Larger L increases belief in H; L=1 leaves the prior unchanged. This is one evidence update, not a general model of dependent evidence. Use prior probability and likelihood ratio as two independent controls. Keep p away from 0 and 1 and L strictly positive. Posterior remains between 0 and 1. Suggested explorations: neutral evidence L=1, and evidence favoring H with L\u003e1.", "section": null, "section_number": null, "equation_number": null, "page": null, "order": 0}], "title": "Bayesian odds update ? project-authored teaching note"}, "experience": {"mode": "canonical", "reason": "upstream resolved_experience is None"}, "dependencies": {"likelihood_ratio": ["one_plus_post_odds", "posterior_odds", "posterior_prob", "prior_vs_posterior"], "one_minus_p": ["one_plus_post_odds", "posterior_odds", "posterior_prob", "prior_odds", "prior_vs_posterior"], "one_plus_post_odds": ["posterior_prob", "prior_vs_posterior"], "posterior_odds": ["one_plus_post_odds", "posterior_prob", "prior_vs_posterior"], "posterior_prob": ["prior_vs_posterior"], "prior_odds": ["one_plus_post_odds", "posterior_odds", "posterior_prob", "prior_vs_posterior"], "prior_prob": ["one_minus_p", "one_plus_post_odds", "posterior_odds", "posterior_prob", "prior_odds", "prior_vs_posterior"], "prior_vs_posterior": []}, "visual_ids": ["posterior_number", "prior_posterior_chart"]}</script>
+  <script>/* Person 3: data-only DOM/SVG renderers. No expression evaluation. */
+(function (global) {
+  'use strict';
+  const NS = 'http://www.w3.org/2000/svg';
+  const el = (tag, text, cls) => { const n = document.createElement(tag); if (text != null) n.textContent = String(text); if (cls) n.className = cls; return n; };
+  const svgEl = (tag, attrs = {}, text) => { const n = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, String(v)); if (text != null) n.textContent = String(text); return n; };
+  const format = v => typeof v === 'number' ? (Number.isFinite(v) ? Number(v.toFixed(3)).toString() : 'Unavailable') : String(v ?? 'Not evaluated');
+  function table(value, title, heatmap = false, domain = null) {
+    if (!Array.isArray(value) || !value.length) return el('p', 'No evaluated data yet.', 'hint');
+    const rows = Array.isArray(value[0]) ? value : [value];
+    if (rows.some(row => !Array.isArray(row) || row.length !== rows[0].length)) throw new Error('Expected a rectangular matrix');
+    const wrap = el('div', null, 'heatmap-wrap');
+    wrap.tabIndex=0;wrap.setAttribute('role','region');wrap.setAttribute('aria-label',title || 'Scrollable values');
+    const t = el('table', null, `data-table${heatmap ? ' heatmap' : ''}`);
+    t.append(el('caption', title));
+    const head = el('tr'); head.append(el('th', ''));
+    rows[0].forEach((_, i) => { const th = el('th', i + 1); th.scope = 'col'; head.append(th); });
+    const thead = el('thead'); thead.append(head); t.append(thead);
+    const nums = rows.flat().filter(v => typeof v === 'number' && Number.isFinite(v));
+    const shared=Array.isArray(domain) && domain.length===2 && domain.every(Number.isFinite) && domain[1]>=domain[0];
+    const lo = shared ? domain[0] : nums.length ? Math.min(0, ...nums) : 0, hi = shared ? domain[1] : nums.length ? Math.max(...nums) : 1;
+    const body = el('tbody');
+    rows.forEach((row, r) => {
+      const tr = el('tr'), th = el('th', r + 1); th.scope = 'row'; tr.append(th);
+      row.forEach(v => {
+        const td = el('td', format(v));
+        if (heatmap && typeof v === 'number' && Number.isFinite(v)) {
+          const ratio = hi === lo ? 0 : Math.max(0,Math.min(1,(v - lo) / (hi - lo)));
+          const rgb = [237,243,231].map((start, i) => Math.round(start + ([36,85,72][i] - start) * ratio));
+          td.style.backgroundColor = `rgb(${rgb.join(',')})`;
+          // Compute actual WCAG relative luminance instead of estimating contrast.
+          const lin = rgb.map(c => c / 255 <= .04045 ? c / 255 / 12.92 : ((c / 255 + .055) / 1.055) ** 2.4);
+          const l = lin[0] * .2126 + lin[1] * .7152 + lin[2] * .0722;
+          td.style.color = (1.05 / (l + .05) >= (l + .05) / .05) ? '#ffffff' : '#000000';
+        }
+        tr.append(td);
+      }); body.append(tr);
+    }); t.append(body); wrap.append(t);
+    if (heatmap) { const key = el('div', null, 'heatmap-key'); key.append(el('span', format(lo)), el('i'), el('span', format(hi))); wrap.append(key); }
+    return wrap;
+  }
+  function pipeline(ir, values, bindings, affected = new Set()) {
+    const wrap = el('div', null, 'pipeline');
+    const entries=[...(ir.controls || []),...(ir.computation?.nodes || [])];
+    const labels=new Map(entries.map(n=>[n.id,n.label || n.id]));
+    if (!bindings || !Object.keys(bindings).length) {
+      wrap.style.display = 'block';
+      const collect = (v, set = new Set()) => {
+        if (Array.isArray(v)) v.forEach(x => collect(x,set));
+        else if (v && typeof v === 'object') {
+          if (typeof v.ref === 'string') set.add(v.ref);
+          Object.entries(v).forEach(([key,x]) => { if (key.endsWith('_ref') && typeof x === 'string') set.add(x); else collect(x,set); });
+        } return set;
+      };
+      (ir.computation?.nodes || []).forEach(n => {
+        const row = el('div',null,'pipeline');
+        const sources = [...collect([n.inputs,n.params])].filter(id=>labels.has(id));
+        if (sources.length) { row.append(el('span',sources.map(id=>labels.get(id)).join(', '),'hint'),el('span','→','pipeline-arrow')); }
+        const box = el('div',null,`pipeline-node${affected.has(n.id) ? ' affected' : ''}`);box.dataset.node=n.id;
+        box.append(el('strong',n.label || n.id),el('div',Array.isArray(values[n.id]) ? 'See intermediate values' : format(values[n.id])));
+        if (affected.has(n.id)) box.append(el('small','Affected by your change'));
+        row.append(box);wrap.append(row);
+      });
+      return wrap;
+    }
+    const ids = bindings && Object.keys(bindings).length ? Object.values(bindings) : (ir.computation?.nodes || []).map(n => n.id);
+    const downstream=global.PaperComputation?.deriveDependencies(ir) || {};
+    ids.forEach((id, i) => {
+      if (i && downstream[ids[i-1]]?.includes(id)) { const arrow = el('span', '→', 'pipeline-arrow'); arrow.setAttribute('aria-hidden', 'true'); wrap.append(arrow); }
+      const label = [...(ir.controls || []), ...(ir.computation?.nodes || [])].find(n => n.id === id)?.label || id;
+      const box = el('div', null, `pipeline-node${affected.has(id) ? ' affected' : ''}`); box.dataset.node = id;
+      box.append(el('strong', label), el('div', Array.isArray(values[id]) ? 'See intermediate values' : format(values[id])));
+      if (affected.has(id)) box.append(el('small', 'Affected by your change'));
+      wrap.append(box);
+    }); return wrap;
+  }
+  function chart(kind, data, options, title) {
+    if (!Array.isArray(data) || !data.length) throw new Error('Chart needs a nonempty numeric array');
+    let points;
+    if (kind === 'scatter') {
+      if (!data.every(p => Array.isArray(p) && p.length === 2 && p.every(Number.isFinite))) throw new Error('Scatter needs [x, y] pairs');
+      points = data;
+    } else {
+      if (!data.every(Number.isFinite)) throw new Error('Chart needs finite numeric values');
+      points = data.map((v, i) => [i, v]);
+    }
+    const domain = d => Array.isArray(d) && d.length===2 && d.every(Number.isFinite) && d[0]<d[1];
+    const xlo = domain(options.x_domain) ? options.x_domain[0] : Math.min(...points.map(p => p[0]));
+    const xhi = domain(options.x_domain) ? options.x_domain[1] : Math.max(xlo + 1, ...points.map(p => p[0]));
+    const ylo = domain(options.domain) ? options.domain[0] : Math.min(0, ...points.map(p => p[1]));
+    const yhi = domain(options.domain) ? options.domain[1] : Math.max(ylo + .001, ...points.map(p => p[1]));
+    const x = v => 55 + (v - xlo) / (xhi - xlo) * 360, y = v => 210 - (v - ylo) / (yhi - ylo) * 165;
+    const wrap = el('div'); wrap.style.width = '100%';
+    const s = svgEl('svg', {viewBox:'0 0 470 255', class:'chart', role:'img'});
+    s.append(svgEl('title', {}, title), svgEl('desc', {}, `X: ${options.x_label || 'item'}. Y: ${options.y_label || 'value'}. Range ${format(ylo)} to ${format(yhi)}. ${points.map((p,i) => `${options.labels?.[i] ?? p[0] + 1}: ${format(p[1])}`).join('; ')}`));
+    [ylo, (ylo+yhi)/2, yhi].forEach(v => { s.append(svgEl('line', {x1:45,y1:y(v),x2:450,y2:y(v),stroke:'currentColor',opacity:.15}), svgEl('text',{x:5,y:y(v)+4},format(v))); });
+    if (kind === 'line_chart') s.append(svgEl('polyline', {points:points.map(p => `${x(p[0])},${y(p[1])}`).join(' '), fill:'none', stroke:'currentColor','stroke-width':2}));
+    points.forEach((p,i) => {
+      const px = kind === 'bar_chart' ? 65 + (i + .5) * 360 / points.length : x(p[0]);
+      if (kind === 'bar_chart') s.append(svgEl('rect',{x:px - 90/points.length,y:Math.min(y(p[1]),y(0)),width:180/points.length,height:Math.abs(y(p[1])-y(0)),rx:3,fill:'currentColor'}));
+      else s.append(svgEl('circle',{cx:px,cy:y(p[1]),r:4,fill:'currentColor'}));
+      if (options.show_values !== false) s.append(svgEl('text',{x:px,y:y(p[1])-9,'text-anchor':'middle'},format(p[1])));
+      s.append(svgEl('text',{x:px,y:235,'text-anchor':'middle'},options.labels?.[i] ?? (kind === 'scatter' ? format(p[0]) : i+1)));
+    }); wrap.append(s);
+    const details = el('details'); details.append(el('summary', 'View chart values'), table(points, title)); wrap.append(details); return wrap;
+  }
+  function scene(spec, values) {
+    const options = spec.options || {}, items = options.elements;
+    if(options.objects) return semanticScene(spec,values);
+    if (!Array.isArray(items)) throw new Error('Scene elements unavailable');
+    const s = svgEl('svg',{viewBox:'0 0 500 300',class:'chart',role:'img'}); s.append(svgEl('title',{},spec.title || 'Mechanism scene'));
+    const allowed = {line:['x1','y1','x2','y2'],arrow:['x1','y1','x2','y2'],circle:['cx','cy','r'],rect:['x','y','width','height','rx'],point:['cx','cy','r'],polyline:['points'],text:['x','y'],axis:['x1','y1','x2','y2'],group:[]};
+    function add(item, parent, depth = 0) {
+      if (depth > 10 || !Object.hasOwn(allowed,item.type)) throw new Error('Unsupported scene element');
+      const attrs = {stroke:'currentColor',fill:item.type === 'text' ? 'currentColor' : 'none'};
+      for (const key of allowed[item.type]) {
+        let v = item[key];
+        if (v && typeof v === 'object' && typeof v.ref === 'string') v = values[v.ref];
+        if (key === 'points') {
+          if (!Array.isArray(v) || !v.every(p => Array.isArray(p) && p.length === 2 && p.every(Number.isFinite))) throw new Error('Invalid polyline');
+          attrs[key] = v.map(p => p.join(',')).join(' ');
+        } else if (v != null) { if (!Number.isFinite(v)) throw new Error('Invalid scene coordinate'); attrs[key] = v; }
+      }
+      const tags = {point:'circle',axis:'line',group:'g',arrow:'line'};
+      const node = svgEl(tags[item.type] || item.type, attrs, item.type === 'text' ? item.text || '' : undefined); parent.append(node);
+      if (item.type === 'arrow') {
+        const a = Math.atan2(attrs.y2-attrs.y1,attrs.x2-attrs.x1);
+        node.parentNode.append(svgEl('polyline',{points:`${attrs.x2-8*Math.cos(a-.5)},${attrs.y2-8*Math.sin(a-.5)} ${attrs.x2},${attrs.y2} ${attrs.x2-8*Math.cos(a+.5)},${attrs.y2-8*Math.sin(a+.5)}`,stroke:'currentColor',fill:'none'}));
+      }
+      if (item.type === 'group') (item.elements || []).forEach(child => add(child,node,depth+1));
+    }
+    items.forEach(item => add(item,s)); return s;
+  }
+  function semanticScene(spec,values) {
+    const options=spec.options || {}, objects=options.objects, links=options.links || [];
+    if(!['horizontal_flow','vertical_flow','radial','grid'].includes(options.layout) || !Array.isArray(objects) || !objects.length || objects.length>24 || !Array.isArray(links) || links.length>48)throw new Error('Invalid semantic scene');
+    const ids=new Set();objects.forEach(o=>{if(typeof o.id!=='string' || ids.has(o.id) || !['circle','process','rect','point'].includes(o.shape))throw new Error('Invalid semantic object');ids.add(o.id);});
+    const s=svgEl('svg',{viewBox:'0 0 600 360',class:'chart',role:'img'});
+    s.append(svgEl('title',{},spec.title || 'Mechanism scene'),svgEl('desc',{},objects.map(o=>o.label || o.id).join(' → ')));
+    const positions=new Map(objects.map((o,i)=>{
+      let x,y;
+      if(options.layout==='horizontal_flow'){x=60+(i+.5)*480/objects.length;y=170;}
+      if(options.layout==='vertical_flow'){x=300;y=30+(i+.5)*300/objects.length;}
+      if(options.layout==='radial'){x=300+190*Math.cos(i*2*Math.PI/objects.length);y=175+115*Math.sin(i*2*Math.PI/objects.length);}
+      if(options.layout==='grid'){const cols=Math.ceil(Math.sqrt(objects.length));x=60+(i%cols+.5)*480/cols;y=30+(Math.floor(i/cols)+.5)*280/Math.ceil(objects.length/cols);}
+      return [o.id,{x,y}];
+    }));
+    links.forEach(link=>{
+      const a=positions.get(link.from),b=positions.get(link.to);if(!a || !b)throw new Error('Unknown semantic link');
+      const angle=Math.atan2(b.y-a.y,b.x-a.x), end={x:b.x-30*Math.cos(angle),y:b.y-30*Math.sin(angle)};
+      s.append(svgEl('line',{x1:a.x,y1:a.y,x2:end.x,y2:end.y,stroke:'currentColor',opacity:.5}),svgEl('polyline',{points:`${end.x-8*Math.cos(angle-.5)},${end.y-8*Math.sin(angle-.5)} ${end.x},${end.y} ${end.x-8*Math.cos(angle+.5)},${end.y-8*Math.sin(angle+.5)}`,stroke:'currentColor',fill:'none'}));
+    });
+    objects.forEach(o=>{
+      const p=positions.get(o.id),g=svgEl('g');
+      const shape=['circle','point'].includes(o.shape) ? svgEl('circle',{cx:p.x,cy:p.y,r:o.shape==='point' ? 8 : 25,fill:'currentColor',opacity:.15}) : svgEl('rect',{x:p.x-36,y:p.y-22,width:72,height:44,rx:8,fill:'currentColor',opacity:.15});
+      g.append(shape,svgEl('text',{x:p.x,y:p.y+42,'text-anchor':'middle'},o.label || o.id));
+      if(o.value)g.append(svgEl('text',{x:p.x,y:p.y+4,'text-anchor':'middle'},format(values[o.value])));
+      s.append(g);
+    });return s;
+  }
+  function nodesEdges(spec, values) {
+    const {nodes, edges} = spec.options || {};
+    if (!Array.isArray(nodes) || !Array.isArray(edges)) throw new Error('Graph nodes or edges unavailable');
+    const s = svgEl('svg',{viewBox:'0 0 500 300',class:'chart',role:'img'}); s.append(svgEl('title',{},spec.title || 'Nodes and edges'));
+    const positions = new Map(nodes.map((n,i) => [n.id,{x:250+100*Math.cos(i*2*Math.PI/nodes.length),y:145+95*Math.sin(i*2*Math.PI/nodes.length)}]));
+    edges.forEach(e => { const a=positions.get(e.source), b=positions.get(e.target); if (!a || !b) throw new Error('Unknown graph endpoint'); s.append(svgEl('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:'currentColor',opacity:.45})); });
+    nodes.forEach(n => { const p=positions.get(n.id); s.append(svgEl('circle',{cx:p.x,cy:p.y,r:18,fill:'currentColor',opacity:.2}),svgEl('text',{x:p.x,y:p.y+32,'text-anchor':'middle'},n.label || n.id)); }); return s;
+  }
+  function render(spec, values, ir, affected = new Set()) {
+    const v = values[spec.value], options = spec.options || {};
+    try {
+      switch (spec.type) {
+        case 'heatmap': case 'matrix': case 'table': case 'vector': return table(v,spec.title || spec.value,spec.type === 'heatmap',options.domain);
+        case 'number': return el('div', `${format(v)}${options.suffix || ''}`, 'big-value');
+        case 'formula': return el('p',options.display || '', 'formula');
+        case 'pipeline': return pipeline(ir,values,spec.bindings,affected);
+        case 'bar_chart': case 'line_chart': case 'scatter': return chart(spec.type,v,options,spec.title || spec.value);
+        case 'scene': return scene(spec,values);
+        case 'nodes_edges': return nodesEdges(spec,values);
+        default: throw new Error('Unsupported visualization');
+      }
+    } catch (_) {
+      // Recover through compatible trusted charts before the generic diagram.
+      try {
+        if(typeof v==='number' && Number.isFinite(v))return el('div',format(v),'big-value');
+        if(Array.isArray(v) && v.length && v.every(Number.isFinite))return chart('bar_chart',v,{},spec.title || spec.value);
+        if(Array.isArray(v) && v.length && v.every(row=>Array.isArray(row) && row.length===v[0].length && row.every(Number.isFinite)))return table(v,spec.title || spec.value,true);
+      } catch (_) { /* Retain the final meaningful diagram fallback. */ }
+      const fallback = el('div'); fallback.append(el('p','Showing the calculation path for this visual.', 'hint'),pipeline(ir,values,null,affected));
+      if (Array.isArray(v)) {try {fallback.append(table(v,spec.title || spec.value));}catch(_){fallback.append(el('p',JSON.stringify(v)));}}
+      else if (v != null) fallback.append(el('p',format(v)));
+      return fallback;
+    }
+  }
+  global.PlaygroundVisuals = {render,table,pipeline,format};
+})(globalThis);
+</script>
+  <script>/* Person 3: compile normalized presentation data into trusted components. */
+(function (global) {
+  'use strict';
+  const el = (tag,text,cls) => {const n=document.createElement(tag);if(text != null)n.textContent=String(text);if(cls)n.className=cls;return n;};
+  const byId = id => document.getElementById(id);
+  const condition = (rule,values) => {
+    if(!rule)return true;
+    const v=values[rule.value];if(typeof v !== 'number' || !Number.isFinite(v))return false;
+    if(rule.op === 'less_than')return v < rule.threshold;
+    if(rule.op === 'greater_than')return v > rule.threshold;
+    return rule.op === 'equal' && v === rule.threshold;
+  };
+  function create(payload,ir,V,context) {
+    const compiled=payload.experience;
+    const directed=compiled?.mode === 'directed';
+    const plan=directed ? {...compiled.plan,guided_mode:[...compiled.plan.guided_mode]} : {guided_mode:[],annotations:[]};
+    (ir.explorations || []).forEach((exploration,index)=>plan.guided_mode.push({
+      target:`exploration_${index}`,explorationIndex:index,
+      instruction:`${exploration.title}. ${exploration.change.instructions} ${exploration.observe} ${exploration.why}`
+    }));
+    const tasks=[],controls=context.widgets;
+    const registry=new Map();
+    (ir.visuals || []).forEach((v,i)=>{let key=compiled.contract==='shared' ? payload.visual_ids[i] : v.id || v.value || `${v.type}_${i}`;if(registry.has(key))key=`${key}_${i}`;registry.set(key,v);});
+    const componentIds={teaching:'overview',idea:'idea',why:'why',mental_model:'mental-model',symbols:'symbols',
+      controls:'controls',main_visual:'main-visual',equation:'formula-strip',intermediates:'intermediates',
+      what_changed:'changes',explorations:'explorations',limitation:'limitations',source_grounding:'source'};
+    let guideIndex=-1;
+    const targets=()=>[...document.querySelectorAll('[data-experience-target], [data-node]')];
+    const clearHighlight=()=>document.querySelectorAll('.guide-target, .guided-dependency').forEach(n=>n.classList.remove('guide-target','guided-dependency'));
+    function targetFor(id) {
+      const control=controls.get(id)?.group;
+      if(control)return control;
+      if(id==='controls')return byId('experience-stage').querySelector('.experience-controls') || byId('controls');
+      if(id==='main_visual')return byId('experience-stage').querySelector('.primary-visual, .experience-visual') || byId('main-visual');
+      if(id==='equation') {
+        const mounted=byId('experience-stage').querySelector('.formula');
+        if(mounted)return mounted;
+        if(byId('formula-strip').hidden)return byId('playground');
+      }
+      if(componentIds[id])return byId(componentIds[id]);
+      const node=targets().find(n=>n.dataset.experienceTarget===id || n.dataset.node===id);
+      if(node)return node;
+      const visual=[...registry.entries()].find(([key,spec])=>key===id || spec.value===id);
+      if(visual) {
+        const host=byId('guide-visual');host.hidden=false;
+        const current=context.getValues();host.replaceChildren(V.render(visual[1],current,ir));return host;
+      }
+      return null;
+    }
+    function guideHighlight(scroll) {
+      clearHighlight();byId('guide-visual').hidden=true;if(guideIndex<0)return;
+      const target=targetFor(plan.guided_mode[guideIndex].target);
+      if(!target)return;
+      target.classList.add('guide-target');
+      const step=plan.guided_mode[guideIndex];
+      if(step.highlight_dependency_path) {
+        const id=registry.get(step.target)?.value || step.target;
+        const path=context.dependencyPath([id]);
+        targets().filter(n=>path.has(n.dataset.node || n.dataset.experienceTarget)).forEach(n=>n.classList.add('guided-dependency'));
+      }
+      if(scroll) {
+        const disclosure=target.closest('details');if(disclosure)disclosure.open=true;
+        target.tabIndex=-1;target.focus({preventScroll:true});
+        target.scrollIntoView({block:'center',behavior:global.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth'});
+      }
+    }
+    function showGuide(index) {
+      guideIndex=index;byId('guided-walkthrough').hidden=false;
+      const step=plan.guided_mode[index];
+      if(Number.isInteger(step.explorationIndex))document.querySelector(`[data-exploration="${step.explorationIndex}"]`)?.click();
+      document.body.classList.add('guide-active');
+      byId('guide-start').hidden=true;
+      byId('guide-progress').textContent=`Step ${index+1} of ${plan.guided_mode.length}`;
+      byId('guide-message').textContent=plan.guided_mode[index].instruction;
+      byId('guide-back').disabled=index===0;
+      byId('guide-next').textContent=index===plan.guided_mode.length-1 ? 'Finish guide' : 'Next →';
+      guideHighlight(true);
+    }
+    function endGuide() {
+      guideIndex=-1;clearHighlight();document.body.classList.remove('guide-active');byId('guided-walkthrough').hidden=true;byId('guide-start').hidden=false;byId('guide-start').focus();
+    }
+    function visualTask(spec,host,target) {
+      host.dataset.experienceTarget=target || spec.value || '';
+      const index=ir.visuals.indexOf(spec);
+      if(index>=0)host.dataset.visualId=payload.visual_ids[index];
+      tasks.push(({values,affected})=>host.replaceChildren(V.render(spec,values,ir,affected)));
+    }
+    function build(node) {
+      if(['split','stack','grid','visual_first','equation_first','pipeline','focus'].includes(node.type)) {
+        const host=el('div',null,`experience-layout layout-${node.type}`);
+        if(node.type==='split')host.dataset.ratio=node.ratio;
+        if(node.type==='grid')host.dataset.columns=node.columns;
+        node.children.forEach(child=>host.append(build(child)));return host;
+      }
+      const card=el('div',null,'panel experience-component');
+      if(node.title)card.append(el('h3',node.title));
+      if(node.type==='control_group') {
+        if(!node.title)card.append(el('h3','Try it','eyebrow'));
+        const group=el('div',null,'experience-controls');
+        node.controls.forEach(id=>{const widget=controls.get(id);if(!widget)throw new Error('Control missing');group.append(widget.mount);});card.append(group);
+      } else if(node.type==='callout') {
+        card.classList.add('experience-callout');card.append(el('p',node.text));tasks.push(({values})=>{card.hidden=!condition(node.when,values);});
+      } else if(node.type==='symbol_legend') {
+        const list=el('dl');(ir.symbols || []).forEach(s=>list.append(el('dt',s.symbol),el('dd',s.meaning)));card.append(list);
+      } else if(node.type==='calculation_steps') {
+        const host=el('div');card.append(host);
+        tasks.push(({values,affected})=>{const copy=context.calculationSteps();copy.removeAttribute('id');host.replaceChildren(copy,V.pipeline(ir,values,null,affected));});
+      } else if(node.type==='comparison') {
+        const spec=registry.get(node.visual);if(!spec)throw new Error('Visual missing');
+        if(!node.title && spec.title)card.append(el('h3',spec.title));
+        const grid=el('div',null,'before-after-grid'), before=el('div'),after=el('div'),a=el('div'),b=el('div');
+        before.append(el('h3','Original setup'),a);after.append(el('h3','Current setup'),b);grid.append(before,after);card.append(grid);
+        card.dataset.experienceTarget=node.visual;
+        tasks.push(({values,baseline,affected})=>{
+          let shared=spec;
+          if(['bar_chart','line_chart','scatter'].includes(spec.type)) {
+            const points=[...(baseline[spec.value] || []),...(values[spec.value] || [])];
+            const ys=(spec.type==='scatter' ? points.map(p=>p[1]) : points).filter(Number.isFinite);
+            if(ys.length) {
+              const lo=Math.min(0,...ys),hi=Math.max(lo+.001,...ys),options={...spec.options,domain:[lo,hi]};
+              if(spec.type==='scatter'){const xs=points.map(p=>p[0]).filter(Number.isFinite);if(xs.length)options.x_domain=[Math.min(...xs),Math.max(Math.min(...xs)+1,...xs)];}
+              shared={...spec,options};
+            }
+          }
+          if(spec.type==='heatmap') {
+            const nums=[baseline[spec.value],values[spec.value]].flat(Infinity).filter(Number.isFinite);
+            if(nums.length)shared={...spec,options:{...spec.options,domain:[Math.min(0,...nums),Math.max(...nums)]}};
+          }
+          a.replaceChildren(V.render(shared,baseline,ir));b.replaceChildren(V.render(shared,values,ir,affected));
+        });
+      } else {
+        const host=el('div',null,'experience-visual');card.append(host);
+        let spec;
+        if(node.type==='dependency_graph')spec={type:'pipeline',title:node.title || 'Dependency path'};
+        else if(node.visual)spec=registry.get(node.visual);
+        else spec={type:node.type==='metric' ? 'number' : node.type,value:node.value,title:node.title || node.value};
+        if(!spec)throw new Error('Visual missing');
+        if(!node.title && spec.title)card.insertBefore(el('h3',spec.title),host);
+        visualTask(spec,host,node.visual || node.value);
+      }
+      return card;
+    }
+    function fallback() {
+      clearHighlight();document.body.classList.remove('guide-active');controls.forEach(w=>byId('controls').append(w.mount));
+      byId('canonical-stage').hidden=false;
+      for(const id of ['experience-stage','experience-summary','experience-annotations','guided-walkthrough','guide-start']) {byId(id).hidden=true;}
+      byId('experience-stage').replaceChildren();
+      byId('formula-strip').hidden=!(ir.visuals || []).some(v=>v.type==='formula');
+      return {update:()=>{},active:false};
+    }
+    try {
+      if(directed) {
+      byId('experience-stage').append(build(plan.tree));byId('experience-stage').hidden=false;
+      byId('experience-stage').className=`experience-stage density-${plan.density}`;
+      byId('canonical-stage').hidden=true;
+      const hasFormula=node=>node.type==='formula' || (node.children || []).some(hasFormula);
+      if(hasFormula(plan.tree))byId('formula-strip').hidden=true;
+      if(plan.hero) {
+        const card=el('div',null,`panel experience-summary emphasis-${plan.hero.emphasis}`),host=el('div');
+        card.append(el('p',registry.get(plan.hero.visual).title || 'The idea in view','eyebrow'),host);
+        byId('experience-summary').append(card);byId('experience-summary').hidden=false;visualTask(registry.get(plan.hero.visual),host,plan.hero.visual);
+      }
+      plan.annotations.forEach(note=>{
+        const card=el('aside',null,`experience-callout panel annotation-${note.kind}`);
+        card.append(el('span',`${note.kind} · ${note.target}`,'eyebrow'),el('p',note.text));
+        byId('experience-annotations').append(card);
+        tasks.push(({values})=>{card.hidden=!condition(note.when,values);});
+      });
+      byId('experience-annotations').hidden=!plan.annotations.length;
+      }
+      if(plan.guided_mode.length) {
+        byId('guide-start').hidden=false;
+        byId('guide-start').addEventListener('click',()=>showGuide(0));
+        byId('guide-back').addEventListener('click',()=>showGuide(Math.max(0,guideIndex-1)));
+        byId('guide-next').addEventListener('click',()=>guideIndex===plan.guided_mode.length-1 ? endGuide() : showGuide(guideIndex+1));
+        byId('guide-end').addEventListener('click',endGuide);
+        document.addEventListener('keydown',e=>{if(e.key==='Escape' && guideIndex>=0)endGuide();});
+      }
+      const controller={active:true,update(data) {
+        if(!controller.active)return;
+        try {
+          tasks.forEach(task=>task(data));
+          if(directed)targets().forEach(n=>{
+            n.classList.toggle('primary-visual',Boolean(plan.primary_visual && n.dataset.experienceTarget===plan.primary_visual));
+            n.closest('.experience-component')?.classList.toggle('primary-component',Boolean(plan.primary_visual && n.dataset.experienceTarget===plan.primary_visual));
+            n.classList.toggle('emphasized-node',Boolean(plan.emphasis_nodes?.includes(n.dataset.node || n.dataset.experienceTarget)));
+          });
+          guideHighlight(false);
+        } catch(_) {fallback();controller.active=false;}
+      }};
+      return controller;
+    } catch(_) {return fallback();}
+  }
+  global.PlaygroundExperience={create,condition};
+})(globalThis);
+</script>
+  <script>/* Person 2 owns this interpreter. Person 3 embeds it before playground-runtime.js.
+ * Scientific AST data only: no eval, Function, DOM, network, or generated code.
+ */
+(function (root) {
+  'use strict';
+  const LIMITS = Object.freeze({iterations: 100, elements: 10000, steps: 20000, depth: 32});
+  const registry = Object.create(null);
+  function register(names, lo, hi = lo, params = []) {
+    names.split(' ').forEach(n => { registry[n] = {arity: [lo, hi], params}; });
+  }
+  register('add subtract multiply divide pow dot matmul equal not_equal less less_equal greater greater_equal and or', 2);
+  register('negate sqrt exp log log2 abs sin cos not transpose flatten', 1);
+  register('sum product mean min max argmin argmax softmax softmax_rows normalize cumsum difference', 1, 1, ['axis']);
+  register('clip where', 3);
+  register('index', 2);
+  register('slice', 1, 1, ['start', 'stop', 'step', 'end_ref']);
+  register('reshape', 1, 1, ['shape']);
+  register('concat', 1, 100, ['axis', 'promote_scalars']);
+  register('range', 1, 3);
+  register('map elementwise', 1, 1, ['body']);
+  register('iterate scan', 2, 2, ['body']);
+  const own = (x, k) => Object.prototype.hasOwnProperty.call(x, k);
+  const fail = msg => { throw new Error(msg); };
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const flat = v => Array.isArray(v) ? v.flat(Infinity) : [v];
+  function shape(v) {
+    if (!Array.isArray(v)) return [];
+    const child = v.length ? shape(v[0]) : [];
+    if (v.some(x => !same(shape(x), child))) fail('Arrays must be rectangular');
+    const s = [v.length, ...child];
+    if (new Set(flat(v).map(x => typeof x)).size > 1) fail('Array elements must have a single type');
+    if (s.length > 2 || flat(v).length > LIMITS.elements) fail('Array size/rank limit exceeded');
+    return s;
+  }
+  function numeric(v) {
+    shape(v);
+    if (flat(v).some(x => typeof x !== 'number' || !Number.isFinite(x))) fail('Expected finite numeric value');
+    return v;
+  }
+  function boolean(v) {
+    shape(v);
+    if (flat(v).some(x => typeof x !== 'boolean')) fail('Expected boolean value');
+    return v;
+  }
+  function finite(v) {
+    shape(v);
+    if (flat(v).some(x => typeof x === 'number' && !Number.isFinite(x))) fail('Nonfinite calculation result');
+    return v;
+  }
+  function integer(v, name) {
+    if (typeof v !== 'number' || !Number.isSafeInteger(v)) fail(name + ' must be an integer scalar');
+    return v;
+  }
+  function broadcast(...values) {
+    const ss = values.map(shape).filter(s => s.length);
+    if (ss.some(s => !same(s, ss[0]))) fail('Only scalar broadcasting or identical shapes allowed');
+  }
+  function unary(v, fn) { return Array.isArray(v) ? v.map(x => unary(x, fn)) : fn(v); }
+  function binary(a, b, fn) {
+    if (Array.isArray(a)) return a.map((x, i) => binary(x, Array.isArray(b) ? b[i] : b, fn));
+    if (Array.isArray(b)) return b.map(x => binary(a, x, fn));
+    return fn(a, b);
+  }
+  function choose(c, a, b) {
+    if (Array.isArray(c)) return c.map((x, i) => choose(x, Array.isArray(a) ? a[i] : a, Array.isArray(b) ? b[i] : b));
+    return c ? a : b;
+  }
+  function axisOf(params, v, defaultAxis = null) {
+    const rank = shape(v).length;
+    let axis = own(params, 'axis') ? params.axis : defaultAxis;
+    if (axis === null) return null;
+    integer(axis, 'axis');
+    if (axis < -rank || axis >= rank) fail('Invalid axis');
+    return (axis + rank) % rank;
+  }
+  function columns(v) { return v[0].map((_, i) => v.map(r => r[i])); }
+  function reduction(v, axis, fn) {
+    const rank = shape(v).length;
+    if (axis === null || rank < 2) return fn(flat(v));
+    return (axis === 0 ? columns(v) : v).map(fn);
+  }
+  function along(v, axis, fn) {
+    const rank = shape(v).length;
+    if (rank < 2) return fn(flat(v));
+    if (axis === null) return fn(flat(v));
+    if (axis === 1) return v.map(fn);
+    return columns(columns(v).map(fn));
+  }
+  function compensated(a, history = false) {
+    let total = 0, correction = 0; const out = [];
+    a.forEach(value => {
+      const updated = total + value;
+      correction += Math.abs(total) >= Math.abs(value) ? (total - updated) + value : (value - updated) + total;
+      total = updated;
+      if (history) out.push(total + correction);
+    });
+    return history ? out : total + correction;
+  }
+  const sum = a => compensated(a);
+  const argmax = a => a.indexOf(Math.max(...a));
+  function typeOf(v) {
+    const s = shape(v);
+    const kind = s.length === 2 ? 'matrix' : s.length === 1 ? 'vector' : typeof v === 'boolean' ? 'boolean' : typeof v === 'string' ? 'categorical' : 'scalar';
+    return {kind, shape: s};
+  }
+  function validateControl(c, v) {
+    finite(v);
+    const actual = typeOf(v), wanted = c.value_kind === 'sequence' ? 'vector' : c.value_kind;
+    if (actual.kind !== wanted && !(c.type === 'select' && c.value_kind === 'categorical' && ['scalar', 'boolean'].includes(actual.kind))) fail(c.id + ': wrong value kind');
+    if (c.shape && !same(c.shape, actual.shape)) fail(c.id + ': wrong shape');
+    const editors = {slider: ['scalar'], number: ['scalar'], checkbox: ['boolean'], select: ['scalar', 'categorical', 'boolean'], vector_editor: ['vector'], matrix_editor: ['matrix'], sequence_editor: ['sequence']};
+    if (!editors[c.type]?.includes(c.value_kind)) fail(c.id + ': incompatible editor');
+    if (c.type === 'select' && !(c.options || []).some(x => same(x, v))) fail(c.id + ': not an option');
+    if (flat(v).some(x => typeof x === 'number' && ((c.min != null && x < c.min) || (c.max != null && x > c.max)))) fail(c.id + ': out of bounds');
+    if (flat(v).some(x => !['number', 'boolean', 'string'].includes(typeof x))) fail('Invalid literal');
+    if (['vector','matrix','sequence'].includes(c.value_kind)) numeric(v);
+  }
+  function references(e, locals = new Set(), depth = 0) {
+    if (depth > LIMITS.depth || !e || typeof e !== 'object' || Array.isArray(e)) fail('Invalid expression/depth');
+    if (own(e, 'ref')) {
+      if (Object.keys(e).length !== 1 || typeof e.ref !== 'string') fail('Invalid reference');
+      return new Set(locals.has(e.ref) ? [] : [e.ref]);
+    }
+    if (own(e, 'const')) {
+      if (Object.keys(e).length !== 1) fail('Invalid constant');
+      finite(e.const);
+      if (flat(e.const).some(x => !['number', 'boolean', 'string'].includes(typeof x))) fail('Invalid constant');
+      return new Set();
+    }
+    const rule = registry[e.op], p = e.params || {};
+    if (!rule || !Array.isArray(e.inputs) || e.inputs.length < rule.arity[0] || e.inputs.length > rule.arity[1]) fail('Unknown op or invalid arity');
+    if (Object.keys(p).some(k => !rule.params.includes(k))) fail('Unsupported parameters');
+    if (Object.keys(e).some(k => !['id', 'op', 'inputs', 'params', 'kind', 'shape', 'display', 'label', 'format'].includes(k))) fail('Unknown expression fields');
+    const refs = new Set();
+    e.inputs.forEach(x => references(x, locals, depth + 1).forEach(r => refs.add(r)));
+    if (e.op === 'slice' && own(p, 'end_ref')) {
+      if (own(p, 'stop') || typeof p.end_ref !== 'string') fail('Invalid end_ref');
+      if (!locals.has(p.end_ref)) refs.add(p.end_ref);
+    }
+    if (['map', 'elementwise', 'iterate', 'scan'].includes(e.op)) {
+      const scoped = new Set(locals);
+      (e.op === 'iterate' ? ['state', 'index'] : e.op === 'scan' ? ['state', 'item', 'index'] : ['item', 'index']).forEach(x => scoped.add(x));
+      references(p.body, scoped, depth + 1).forEach(r => refs.add(r));
+    }
+    return refs;
+  }
+  function graph(spec) {
+    const controls = new Set(spec.controls.map(c => c.id)), nodes = new Map(spec.computation.nodes.map(n => [n.id, n]));
+    if (controls.size !== spec.controls.length || nodes.size !== spec.computation.nodes.length) fail('Duplicate IDs');
+    if ([...nodes.keys()].some(n => controls.has(n))) fail('Control/node collision');
+    if ([...controls, ...nodes.keys()].some(n => ['state', 'item', 'index'].includes(n))) fail('Reserved ID');
+    const refs = new Map([...nodes].map(([id, n]) => [id, references(n)]));
+    for (const deps of refs.values()) for (const ref of deps) if (!nodes.has(ref) && !controls.has(ref)) fail('Unknown reference: ' + ref);
+    if (spec.computation.outputs.some(id => !nodes.has(id) && !controls.has(id))) fail('Unknown output');
+    const order = [], done = new Set(), active = new Set();
+    function visit(id) {
+      if (controls.has(id) || done.has(id)) return;
+      if (active.has(id)) fail('Cyclic computation graph');
+      active.add(id);
+      [...refs.get(id)].sort().forEach(visit);
+      active.delete(id); done.add(id); order.push(id);
+    }
+    nodes.forEach((_, id) => visit(id));
+    return {controls, nodes, refs, order};
+  }
+  function deriveDependencies(spec) {
+    const g = graph(spec), out = Object.create(null);
+    [...g.controls, ...g.nodes.keys()].sort().forEach(source => {
+      const affected = new Set(); let changed = true;
+      while (changed) {
+        changed = false;
+        g.refs.forEach((deps, id) => {
+          if (!affected.has(id) && [...deps].some(d => d === source || affected.has(d))) { affected.add(id); changed = true; }
+        });
+      }
+      out[source] = [...affected].sort();
+    });
+    return out;
+  }
+  function compatible(a,b) {return a.length===b.length&&a.every((d,i)=>d===null||b[i]===null||d===b[i]);}
+  function literalType(v) {const t=typeOf(v),leaf=flat(v)[0];return {dtype:typeof leaf==='boolean'?'boolean':typeof leaf==='string'?'categorical':'numeric',shape:t.shape};}
+  function typeKind(t){return t.shape.length===2?'matrix':t.shape.length===1?'vector':t.dtype==='boolean'?'boolean':t.dtype==='categorical'?'categorical':'scalar';}
+  function mergedShape(args){let result=[];args.filter(t=>t.shape.length).forEach(t=>{if(!result.length)result=t.shape;else{if(!compatible(result,t.shape))fail('Static shape mismatch');result=result.map((d,i)=>d===null?t.shape[i]:d);}});return result;}
+  function checkMapProjection(op, count, bodyShape) {
+    let projected = count;
+    if (op === 'elementwise') {
+      if (bodyShape.length) fail('elementwise body must return scalar');
+    } else {
+      if (bodyShape.length + 1 > 2) fail('map projected output exceeds rank limit');
+      if (bodyShape.includes(null)) return;
+      for (const dimension of bodyShape) projected *= dimension;
+    }
+    if (projected > LIMITS.elements) fail(op + ' projected output exceeds element limit');
+  }
+  function inferExpression(e,types,depth=0){
+    if(depth>LIMITS.depth)fail('Type inference depth');
+    if(own(e,'ref'))return types[e.ref];if(own(e,'const'))return literalType(e.const);
+    const op=e.op,p=e.params||{},a=e.inputs.map(x=>inferExpression(x,types,depth+1));
+    const result=(dtype,shape)=>({dtype,shape});
+    function numbers(...v){if(v.some(t=>t.dtype!=='numeric'))fail(op+': numeric operands required');}
+    function axis(){const ax=own(p,'axis')?p.axis:null;if(ax===null)return null;if(!Number.isInteger(ax)||ax< -a[0].shape.length||ax>=a[0].shape.length)fail('Static invalid axis');return (ax+a[0].shape.length)%a[0].shape.length;}
+    if(['map','elementwise','iterate','scan'].includes(op)){
+      const first=a[0],scope=Object.assign(Object.create(null),types,{index:result('numeric',[])});
+      if(['map','elementwise'].includes(op)){if(!first.shape.length)fail('Static map requires array');scope.item=result(first.dtype,op==='elementwise'?[]:first.shape.slice(1));}
+      else{scope.state=first;if(op==='iterate'){numbers(a[1]);if(a[1].shape.length)fail('Static iteration count must be scalar');}else{if(a[1].shape.length!==1)fail('Static scan requires vector');scope.item=result(a[1].dtype,[]);}}
+      const body=inferExpression(p.body,scope,depth+1);let out;
+      if(['iterate','scan'].includes(op)){if(body.dtype!==first.dtype||!compatible(body.shape,first.shape))fail('Static iteration state mismatch');out=op==='iterate'?first:result(first.dtype,[a[1].shape[0],...first.shape]);}
+      else if(op==='elementwise'){if(body.shape.length)fail('Static elementwise body must return scalar');out=result(body.dtype,first.shape);}
+      else out=result(body.dtype,[first.shape[0],...body.shape]);
+      if(out.shape.length>2)fail('Static rank limit');return out;
+    }
+    if(op==='where'){if(a[0].dtype!=='boolean'||a[1].dtype!==a[2].dtype)fail('Static where types');return result(a[1].dtype,mergedShape(a));}
+    if(['equal','not_equal'].includes(op)){if(a[0].dtype!==a[1].dtype)fail('Static comparison types');return result('boolean',mergedShape(a));}
+    if(['and','or','not'].includes(op)){if(a.some(t=>t.dtype!=='boolean'))fail('Static logic types');return result('boolean',mergedShape(a));}
+    if(['less','less_equal','greater','greater_equal'].includes(op)){numbers(...a);return result('boolean',mergedShape(a));}
+    if(['add','subtract','multiply','divide','pow','clip'].includes(op)){numbers(...a);return result('numeric',mergedShape(a));}
+    if(['negate','sqrt','exp','log','log2','abs','sin','cos'].includes(op)){numbers(...a);return a[0];}
+    if(['dot','matmul','transpose'].includes(op)){
+      numbers(...a);const s=a[0].shape;
+      if(op==='transpose'){if(s.length!==2)fail('Static transpose requires matrix');return result('numeric',[s[1],s[0]]);}
+      const t=a[1].shape;if(op==='dot'){if(s.length!==1||!compatible(s,t))fail('Static dot shape');return result('numeric',[]);}
+      if(s.length!==2||t.length!==2||!compatible([s[1]],[t[0]]))fail('Static matmul shape');return result('numeric',[s[0],t[1]]);
+    }
+    if(op==='index'){numbers(a[1]);if(!a[0].shape.length||a[1].shape.length)fail('Static index types');return result(a[0].dtype,a[0].shape.slice(1));}
+    if(op==='flatten')return result(a[0].dtype,[a[0].shape.includes(null)?null:a[0].shape.reduce((x,y)=>x*y,1)]);
+    if(op==='reshape'){
+      if(!Array.isArray(p.shape)||p.shape.length<1||p.shape.length>2||p.shape.some(n=>!Number.isInteger(n)||n<1))fail('Static reshape dimensions');
+      if(!a[0].shape.includes(null)&&a[0].shape.reduce((x,y)=>x*y,1)!==p.shape.reduce((x,y)=>x*y,1))fail('Static reshape size');return result(a[0].dtype,p.shape);
+    }
+    if(op==='slice'){
+      if(!a[0].shape.length)fail('Static slice requires array');let length=null;
+      if(own(p,'end_ref')){numbers(types[p.end_ref]);if(types[p.end_ref].shape.length)fail('Static slice endpoint');}
+      else if(a[0].shape[0]!==null)length=operation('slice',[Array(a[0].shape[0]).fill(0)],p,null).length;
+      return result(a[0].dtype,[length,...a[0].shape.slice(1)]);
+    }
+    if(op==='concat'){
+      const dims=a.map(t=>!t.shape.length&&p.promote_scalars?[1]:t.shape),rank=dims[0].length;
+      if(!rank||dims.some(s=>s.length!==rank)||a.some(t=>t.dtype!==a[0].dtype))fail('Static concat types');let ax=own(p,'axis')?p.axis:0;
+      if(!Number.isInteger(ax)||ax< -rank||ax>=rank)fail('Static concat axis');ax=(ax+rank)%rank;
+      const others=s=>s.filter((_,i)=>i!==ax);if(dims.some(s=>!compatible(others(dims[0]),others(s))))fail('Static concat shape');
+      const total=dims.some(s=>s[ax]===null)?null:sum(dims.map(s=>s[ax]));const out=[...dims[0]];out[ax]=total;return result(a[0].dtype,out);
+    }
+    numbers(...a);if(op==='range'){if(a.some(t=>t.shape.length))fail('Static range arguments');return result('numeric',[null]);}
+    const ax=axis(),dims=a[0].shape;
+    if(['sum','product','mean','min','max','argmin','argmax'].includes(op))return result('numeric',ax===null?[]:dims.filter((_,i)=>i!==ax));
+    if(op==='softmax_rows'&&dims.length!==2)fail('Static softmax_rows matrix required');
+    if(['softmax','softmax_rows','normalize'].includes(op))return a[0];
+    if(['cumsum','difference'].includes(op)){
+      const out=ax!==null?[...dims]:[dims.includes(null)?null:dims.reduce((x,y)=>x*y,1)];
+      if(op==='difference'){const d=ax===null?0:ax;if(out[d]!==null)out[d]=Math.max(out[d]-1,0);}return result('numeric',out);
+    }
+    fail('Cannot infer operation '+op);
+  }
+  function validateTypesShapes(spec){
+    const g=graph(spec),types=Object.create(null);spec.controls.forEach(c=>{types[c.id]=literalType(c.default);});
+    g.order.forEach(id=>{const node=g.nodes.get(id),t=inferExpression(node,types);
+      if(node.kind&&typeKind(t)!==(node.kind==='sequence'?'vector':node.kind))fail(id+': static declared kind mismatch');
+      if(node.shape&&!compatible(node.shape,t.shape))fail(id+': static declared shape mismatch');types[id]=t;});return types;
+  }
+  function engine() {
+    let steps = 0;
+    function expression(e, values, mask = null, depth = 0) {
+      if (++steps > LIMITS.steps || depth > LIMITS.depth) fail('Execution step/depth limit');
+      if (own(e, 'ref')) { if (!own(values, e.ref)) fail('Unknown reference'); return values[e.ref]; }
+      if (own(e, 'const')) return e.const;
+      const op = e.op, p = e.params || {};
+      if (op === 'where') {
+        const condition = boolean(expression(e.inputs[0], values, mask, depth + 1));
+        if (!Array.isArray(condition)) return expression(e.inputs[condition ? 1 : 2], values, mask, depth + 1);
+        const active = mask === null ? unary(condition, () => true) : binary(condition, mask, (_, m) => m);
+        const yes = binary(active, condition, (a, c) => a && c), no = binary(active, condition, (a, c) => a && !c);
+        let a = flat(yes).some(Boolean) ? expression(e.inputs[1], values, yes, depth + 1) : null;
+        let b = flat(no).some(Boolean) ? expression(e.inputs[2], values, no, depth + 1) : null;
+        if (a === null) a = b === null ? 0 : b;
+        if (b === null) b = a;
+        broadcast(condition, a, b);
+        return choose(condition, a, b);
+      }
+      const args = e.inputs.map(x => expression(x, values, mask, depth + 1));
+      if (['map', 'elementwise'].includes(op)) {
+        if (!Array.isArray(args[0])) fail('map/elementwise requires array');
+        const items = op === 'elementwise' ? flat(args[0]) : args[0];
+        const scope = Object.create(null), inputType = literalType(args[0]);
+        Object.keys(values).forEach(name => { scope[name] = literalType(values[name]); });
+        scope.item = {dtype: inputType.dtype, shape: op === 'elementwise' ? [] : inputType.shape.slice(1)};
+        scope.index = {dtype: 'numeric', shape: []};
+        checkMapProjection(op, items.length, inferExpression(p.body, scope).shape);
+        if (!items.length) return op === 'elementwise' ? unary(args[0], x => x) : [];
+        const out = []; let bodyShape = null;
+        for (let index = 0; index < items.length; index++) {
+          const candidate = expression(p.body, Object.assign(Object.create(null), values, {item: items[index], index}), null, depth + 1);
+          const candidateShape = shape(candidate);
+          checkMapProjection(op, items.length, candidateShape);
+          if (bodyShape !== null && !same(bodyShape, candidateShape)) fail('map body result shape changed');
+          bodyShape = candidateShape;
+          out.push(candidate);
+        }
+        if (op === 'elementwise') {
+          if (out.some(Array.isArray)) fail('elementwise body must return scalar');
+          return reshape(out, shape(args[0]));
+        }
+        return finite(out);
+      }
+      if (['iterate', 'scan'].includes(op)) {
+        let count, items;
+        if (op === 'iterate') { count = integer(args[1], 'iteration count'); items = Array.from({length: Math.max(0, Math.min(count, 101))}, (_, i) => i); }
+        else { if (shape(args[1]).length !== 1) fail('scan requires vector'); items = args[1]; count = items.length; }
+        if (count < 0 || count > LIMITS.iterations) fail('Iteration limit exceeded');
+        if (op === 'scan' && (shape(args[0]).length + 1 > 2 || count * flat(args[0]).length > LIMITS.elements)) fail('scan projected output exceeds size/rank limit');
+        let state = args[0]; const history = [];
+        items.forEach((item, index) => {
+          const locals = Object.assign(Object.create(null), values, {state, index});
+          if (op === 'scan') locals.item = item;
+          const next = finite(expression(p.body, locals, null, depth + 1));
+          if (!same(typeOf(next), typeOf(args[0]))) fail('Iteration state changed shape/type');
+          state = next; if (op === 'scan') history.push(state);
+        });
+        return op === 'iterate' ? state : finite(history);
+      }
+      let params = p;
+      if (op === 'slice' && own(p, 'end_ref')) params = {...p, stop: expression({ref: p.end_ref}, values, null, depth + 1)};
+      return finite(operation(op, args, params, mask));
+    }
+    return expression;
+  }
+  function reshape(v, s) {
+    if (!Array.isArray(s) || s.length < 1 || s.length > 2 || s.some(n => !Number.isInteger(n) || n < 1)) fail('Invalid reshape');
+    const f = flat(v);
+    if (s.reduce((a, b) => a * b, 1) !== f.length) fail('reshape size mismatch');
+    return s.length === 1 ? f : Array.from({length: s[0]}, (_, i) => f.slice(i * s[1], (i + 1) * s[1]));
+  }
+  function operation(op, a, p, mask) {
+    const binaries = {add: (x,y)=>x+y, subtract:(x,y)=>x-y, multiply:(x,y)=>x*y, divide:(x,y)=>{if(y===0)fail('Division by zero');return x/y;}, pow:Math.pow,
+      equal:(x,y)=>x===y, not_equal:(x,y)=>x!==y, less:(x,y)=>x<y, less_equal:(x,y)=>x<=y, greater:(x,y)=>x>y, greater_equal:(x,y)=>x>=y, and:(x,y)=>x&&y, or:(x,y)=>x||y};
+    if (own(binaries, op)) {
+      if (['and','or'].includes(op)) a.forEach(boolean);
+      else if (['equal','not_equal'].includes(op)) {
+        const ta = typeof flat(a[0])[0], tb = typeof flat(a[1])[0];
+        if (ta !== tb) fail('Comparison types differ');
+      } else a.forEach(numeric);
+      broadcast(...a);
+      if (mask !== null && ['divide','pow'].includes(op)) a = a.map(x => choose(mask, x, 1));
+      return binary(a[0], a[1], binaries[op]);
+    }
+    const unaries = {negate:x=>-x, sqrt:x=>{if(x<0)fail('Negative sqrt');return Math.sqrt(x);}, exp:Math.exp,
+      log:x=>{if(x<=0)fail('Nonpositive log');return Math.log(x);}, log2:x=>{if(x<=0)fail('Nonpositive log2');return Math.log2(x);}, abs:Math.abs, sin:Math.sin, cos:Math.cos, not:x=>!x};
+    if (own(unaries, op)) {
+      op === 'not' ? boolean(a[0]) : numeric(a[0]);
+      let v = a[0];
+      if (mask !== null && ['sqrt','log','log2','exp'].includes(op)) v = choose(mask, v, 1);
+      return unary(v, unaries[op]);
+    }
+    if (op === 'clip') {
+      a.forEach(numeric); broadcast(...a);
+      if (flat(binary(a[1], a[2], (x,y)=>x>y)).some(Boolean)) fail('Clip bounds reversed');
+      return binary(binary(a[0],a[1],Math.max),a[2],Math.min);
+    }
+    if (op === 'transpose') { numeric(a[0]); if(shape(a[0]).length!==2)fail('transpose requires matrix'); return columns(a[0]); }
+    if (op === 'dot') { a.forEach(numeric); if(shape(a[0]).length!==1 || !same(shape(a[0]),shape(a[1])))fail('dot shape mismatch'); return sum(a[0].map((x,i)=>x*a[1][i])); }
+    if (op === 'matmul') {
+      a.forEach(numeric); const sa=shape(a[0]),sb=shape(a[1]);
+      if(sa.length!==2||sb.length!==2||sa[1]!==sb[0])fail('matmul shape mismatch');
+      if(sa[0]*sb[1]>LIMITS.elements)fail('Matrix size limit');
+      const cols=columns(a[1]); return a[0].map(row=>cols.map(col=>sum(row.map((x,i)=>x*col[i]))));
+    }
+    if (op === 'range') {
+      a.forEach(x=>integer(x,'range argument')); let start=0,stop=a[0],step=1;
+      if(a.length>1){start=a[0];stop=a[1];step=a.length>2?a[2]:1;}
+      if(step===0)fail('Zero range step'); const n=Math.max(0,Math.ceil((stop-start)/step));
+      if(n>LIMITS.elements)fail('range size limit'); return Array.from({length:n},(_,i)=>start+i*step);
+    }
+    if(op==='index'){if(!Array.isArray(a[0]))fail('index requires array');let i=integer(a[1],'index');if(i<0)i+=a[0].length;if(i<0||i>=a[0].length)fail('Index bounds');return a[0][i];}
+    if(op==='slice') {
+      const v=a[0];if(!Array.isArray(v))fail('slice requires array');const step=own(p,'step')?integer(p.step,'step'):1;if(step===0)fail('Zero slice step');
+      const n=v.length, positive=step>0;
+      function bound(key, fallback){if(!own(p,key))return fallback;let x=integer(p[key],'slice bound');if(x<0)x+=n;return Math.max(positive?0:-1,Math.min(positive?n:n-1,x));}
+      const start=bound('start',positive?0:n-1),stop=bound('stop',positive?n:-1),out=[];
+      for(let i=start;positive?i<stop:i>stop;i+=step)out.push(v[i]);return out;
+    }
+    if(op==='flatten')return flat(a[0]);
+    if(op==='reshape')return reshape(a[0],p.shape);
+    if(op==='concat') {
+      if(new Set(a.map(x => literalType(x).dtype)).size > 1) fail('concat operand types differ');
+      if(a.reduce((total, x) => total + flat(x).length, 0) > LIMITS.elements) fail('concat projected output exceeds element limit');
+      const v=a.map(x=>p.promote_scalars&&!Array.isArray(x)?[x]:x);
+      if(v.some(x=>!Array.isArray(x)))fail('concat requires arrays');const axis=axisOf(p,v[0],0),rank=shape(v[0]).length;
+      if(v.some(x=>shape(x).length!==rank))fail('concat rank mismatch');
+      if(axis===0){if(rank===2&&v.some(x=>shape(x)[1]!==shape(v[0])[1]))fail('concat shape mismatch');return v.flat(1);}
+      if(v.some(x=>x.length!==v[0].length))fail('concat shape mismatch');return v[0].map((_,i)=>v.flatMap(x=>x[i]));
+    }
+    numeric(a[0]);if(flat(a[0]).length===0)fail('Empty input');let axis=axisOf(p,a[0]);
+    const reductions={sum,product:x=>x.reduce((s,y)=>s*y,1),mean:x=>sum(x)/x.length,min:x=>Math.min(...x),max:x=>Math.max(...x),argmin:x=>x.indexOf(Math.min(...x)),argmax};
+    if(own(reductions,op))return reduction(a[0],axis,reductions[op]);
+    if(op==='cumsum')return along(a[0],axis,v=>compensated(v,true));
+    if(op==='difference')return along(a[0],axis,v=>v.slice(1).map((x,i)=>x-v[i]));
+    if(op==='softmax_rows'){if(shape(a[0]).length!==2)fail('softmax_rows requires matrix');axis=1;}
+    if(['softmax','softmax_rows','normalize'].includes(op)) {
+      const fn=v=>{let terms=v;if(op!=='normalize'){const max=Math.max(...v);terms=v.map(x=>Math.exp(x-max));}const total=sum(terms);if(total===0)fail('Zero total');return terms.map(x=>x/total);};
+      if(axis===null){const f=fn(flat(a[0]));const s=shape(a[0]);return s.length?reshape(f,s):f[0];}
+      return along(a[0],axis,fn);
+    }
+    fail('Unknown operation: '+op);
+  }
+  function evaluate(spec, inputs = {}) {
+    const g=graph(spec),values=Object.create(null);
+    validateTypesShapes(spec);
+    if(Object.keys(inputs).some(k=>!g.controls.has(k)))fail('Unknown input control');
+    spec.controls.forEach(c=>{const v=own(inputs,c.id)?inputs[c.id]:c.default;validateControl(c,v);values[c.id]=v;});
+    const expr=engine();
+    g.order.forEach(id=>{const n=g.nodes.get(id),v=finite(expr(n,values)),t=typeOf(v);
+      if(n.kind&&t.kind!==(n.kind==='sequence'?'vector':n.kind))fail(id+': declared kind mismatch');
+      if(n.shape&&!same(n.shape,t.shape))fail(id+': declared shape mismatch');values[id]=v;});
+    return values;
+  }
+  function evaluateExpression(e, values = {}) { references(e); return finite(engine()(e,values)); }
+  const api = Object.freeze({evaluate, evaluateExpression, deriveDependencies, validateTypesShapes, typeOf, operations: registry, limits: LIMITS});
+  if(typeof module==='object'&&module.exports)module.exports=api;
+  else root.PaperComputation=api;
+})(typeof globalThis==='object'?globalThis:this);
+</script>
+  <script></script>
+  <script>/* Person 3 UI runtime. Computation is delegated to Person 2's evaluator. */
+(function (global) {
+  'use strict';
+  const payload = JSON.parse(document.getElementById('playground-data').textContent);
+  const ir = payload.ir, V = global.PlaygroundVisuals;
+  const byId = id => document.getElementById(id);
+  const el = (tag, text, cls) => { const n=document.createElement(tag); if(text != null)n.textContent=String(text); if(cls)n.className=cls; return n; };
+  const clone = value => JSON.parse(JSON.stringify(value));
+  const defaults = () => Object.fromEntries((ir.controls || []).map(c => [c.id,clone(c.default)]));
+  let state = defaults(), desiredState = clone(state), values = {...state,...payload.values}, evaluator = global.PlaygroundEvaluator || global.PaperComputation;
+  let selected = 0, affected = new Set(), revision = 0;
+  let experienceUI=null, baseline=clone(values), beforeValues=clone(values);
+  const experiencePlan=payload.experience?.mode === 'directed' ? payload.experience.plan : null;
+  const widgets = new Map();
+  const nodes = ir.computation?.nodes || [];
+  let dependencies=payload.dependencies;
+  if(!dependencies && global.PaperComputation?.deriveDependencies)dependencies=global.PaperComputation.deriveDependencies(ir);
+  const visuals = (ir.visuals || []).filter(v => v.type !== 'formula');
+  if (!visuals.length) visuals.push({type:'pipeline',title:'Calculation path'});
+  const formula = (ir.visuals || []).find(v => v.type === 'formula');
+  function text(id,value) { byId(id).textContent=value || ''; }
+  text('concept-title',ir.teaching?.title); text('idea',ir.teaching?.idea); text('why',ir.teaching?.why); text('mental-model',ir.teaching?.mental_model);
+  // On compact screens, teach through the controls first and keep the context
+  // nearby. Move the actual section so visual and screen-reader order agree.
+  const compact=global.matchMedia('(max-width: 700px)');
+  function placeContext() { (compact.matches ? byId('changes') : byId('overview')).after(byId('context')); }
+  placeContext();compact.addEventListener('change',placeContext);
+  const reference=[payload.source?.title,payload.source?.section,payload.source?.equation].filter(Boolean).join(' · ');
+  text('paper-label',reference);byId('paper-label').hidden=!reference;
+  (ir.symbols || []).forEach(s => byId('symbols').append(el('dt',s.symbol),el('dd',`${s.meaning}${s.units ? ` · ${s.units}` : ''}`)));
+  if(formula) { byId('formula-strip').hidden=false; text('formula',formula.options?.display); }
+  text('limitation-text',ir.limitation?.text);
+  (ir.evidence || []).forEach(e => { const li=el('li',e.claim); li.append(el('span',`Evidence: ${(e.blocks || []).join(', ')}`, 'evidence-ref')); byId('evidence').append(li); });
+  [...(ir.provenance?.simplifications || []),...(ir.provenance?.toy_examples || [])].forEach(s => byId('simplifications').append(el('li',s)));
+  const source=payload.source || {}, sourceText=el('div');
+  sourceText.append(el('h3',source.title || source.url || 'Source evidence'),el('p',source.authors || 'Evidence block IDs are provided below.'));
+  if(source.section)sourceText.append(el('p',source.section));
+  byId('source-card').append(sourceText);
+  const sourceBlocks=Array.isArray(source.blocks) ? source.blocks : [];
+  const evidenceIds=new Set((ir.evidence || []).flatMap(e=>e.blocks || []));
+  sourceBlocks.filter(block=>evidenceIds.has(block.id)).forEach(block=>{
+    const card=el('article',null,'source-excerpt');
+    card.append(el('h4',block.section || 'From the provided excerpt'));
+    const meta=[block.section_number != null ? `Section ${block.section_number}` : null,
+      block.equation_number != null ? `Eq. ${block.equation_number}` : null,
+      block.page != null ? `Page ${block.page}` : null].filter(Boolean).join(' · ');
+    if(meta)card.append(el('p',meta,'evidence-ref'));
+    card.append(el('p',block.text || ''),el('small',`${block.type || 'Excerpt'} · ${block.id}`));
+    byId('source-excerpts').append(card);
+  });
+  if(source.url) { try { const url=new URL(source.url); if(['https:','http:'].includes(url.protocol)) { const a=el('a','Open paper ↗'); a.href=url.href; a.target='_blank'; a.rel='noopener noreferrer'; byId('source-card').append(a); } } catch (_) { /* Invalid URL stays inert. */ } }
+  // Walk references only, never execute AST nodes. Params such as end_ref also
+  // contribute to the visible dependency path.
+  function refs(value,found=new Set()) {
+    if(Array.isArray(value))value.forEach(v => refs(v,found));
+    else if(value && typeof value === 'object') {
+      if(typeof value.ref === 'string')found.add(value.ref);
+      for(const [key,v] of Object.entries(value)) {
+        if(key.endsWith('_ref') && typeof v === 'string')found.add(v);
+        else refs(v,found);
+      }
+    } return found;
+  }
+  function dependencyPath(ids) {
+    if(dependencies) {
+      const result=new Set(ids);ids.forEach(id=>(dependencies[id] || []).forEach(target=>result.add(target)));return result;
+    }
+    const result=new Set(ids); let changed=true;
+    while(changed) { changed=false; nodes.forEach(n => { if(!result.has(n.id) && [...refs([n.inputs,n.params])].some(id => result.has(id))) {result.add(n.id);changed=true;} }); }
+    return result;
+  }
+  function error(message) { const box=byId('runtime-error'); box.hidden=!message; box.textContent=message || ''; }
+  function numeric(c,input) {
+    const n=input.valueAsNumber;
+    if(!Number.isFinite(n) || !input.checkValidity()) { input.setAttribute('aria-invalid','true'); throw new Error(`Enter a valid value for ${c.label}${c.min != null || c.max != null ? ` (${c.min ?? 'no minimum'} to ${c.max ?? 'no maximum'})` : ''}.`); }
+    input.removeAttribute('aria-invalid'); return n;
+  }
+  function numericAttrs(input,c) { for(const attr of ['min','max','step']) if(c[attr] != null)input.setAttribute(attr,c[attr]); if(c.step == null)input.step='any'; }
+  let complexControls=0;
+  function addControl(c,index) {
+    const group=el('div',null,'control'), head=el('div',null,'control-head');
+    group.dataset.controlKind=c.type;
+    const label=el('label',c.label), id=`control-${index}`, helpId=`help-${index}`; label.htmlFor=id; head.append(label); group.append(head);
+    let sync, inputs=[];
+    const onChange=(input,read) => input.addEventListener('input',() => { try { const next=read(); change({[c.id]:next},c.label); } catch(e) { error(e.message); } });
+    if(['matrix_editor','vector_editor','sequence_editor'].includes(c.type)) {
+      const grid=el('div',null,'matrix-editor'), rows=c.type === 'matrix_editor' ? c.default : [c.default];
+      grid.setAttribute('role','group'); grid.setAttribute('aria-label',c.label); grid.id=id;
+      const matrix=c.type==='matrix_editor';
+      grid.style.gridTemplateColumns=`${matrix ? '1rem ' : ''}repeat(${rows[0]?.length || 1},minmax(2.6rem,1fr))`;
+      if(matrix) {
+        const shape=el('span',`${rows.length} × ${rows[0]?.length || 0}`,'control-shape');head.append(shape);
+        grid.append(el('span','', 'matrix-axis'));
+      }
+      (rows[0] || []).forEach((_,col)=>grid.append(el('span',col+1,'matrix-axis')));
+      const cells=[];
+      rows.forEach((row,r) => { if(!Array.isArray(row))throw new Error(`Invalid editor shape: ${c.id}`); if(matrix)grid.append(el('span',r+1,'matrix-axis')); row.forEach((v,col) => {
+        const input=el('input'); input.type='number'; input.value=v; numericAttrs(input,c); input.setAttribute('aria-label',`${c.label}, ${c.type === 'matrix_editor' ? `row ${r+1}, column ${col+1}` : `entry ${col+1}`}`); input.setAttribute('aria-describedby',helpId);
+        cells.push({input,r,col});inputs.push(input);grid.append(input);
+        onChange(input,() => { const next=clone(desiredState[c.id]), n=numeric(c,input); if(c.type === 'matrix_editor')next[r][col]=n;else next[col]=n;return next; });
+      }); });
+      group.append(grid); sync=() => cells.forEach(({input,r,col}) => { input.value=c.type === 'matrix_editor' ? desiredState[c.id][r][col] : desiredState[c.id][col]; input.removeAttribute('aria-invalid'); });
+    } else {
+      const input=el(c.type === 'select' ? 'select' : 'input'); input.id=id;input.setAttribute('aria-describedby',helpId);inputs=[input];
+      if(c.type === 'checkbox') { input.type='checkbox';head.append(input);sync=() => {input.checked=Boolean(desiredState[c.id]);};onChange(input,() => input.checked); }
+      else if(c.type === 'select') { (c.options || []).forEach((option,i) => { const o=el('option',typeof option === 'object' ? option.label : option); o.value=i;input.append(o); });group.append(input); const optionValue=o => typeof o === 'object' && o != null ? o.value : o;sync=() => {input.value=c.options.findIndex(o => JSON.stringify(optionValue(o)) === JSON.stringify(desiredState[c.id]));};onChange(input,() => optionValue(c.options[Number(input.value)])); }
+      else if(['slider','number'].includes(c.type)) {
+        input.type=c.type === 'slider' ? 'range' : 'number';numericAttrs(input,c);group.append(input);
+        const output=el('output',null,'control-value');output.htmlFor=id;head.append(output);
+        sync=() => {input.value=desiredState[c.id];output.textContent=V.format(desiredState[c.id]);input.removeAttribute('aria-invalid');};onChange(input,() => numeric(c,input));
+        if(c.type === 'slider') { const bounds=el('div',null,'range-bounds');bounds.append(el('span',c.min),el('span',c.max));group.append(bounds); }
+      } else { group.append(el('p',`Unsupported control: ${c.type}`,'hint'));input.disabled=true;sync=() => {}; }
+    }
+    const help=el('p',c.help || '', 'control-help'); help.id=helpId;group.append(help);
+    let mount=group;
+    if(['matrix_editor','vector_editor','sequence_editor'].includes(c.type) && complexControls++ > 0) {
+      mount=el('details',null,'control-disclosure');mount.append(el('summary',c.label),group);
+      mount.dataset.controlKind=c.type;
+      const regular=global.matchMedia('(min-width: 701px)');mount.open=regular.matches;
+      regular.addEventListener('change',event=>{mount.open=event.matches;});
+    }
+    byId('controls').append(mount);
+    group.dataset.experienceTarget=c.id;
+    sync();widgets.set(c.id,{sync,inputs,group,mount});
+  }
+  function interactive(enabled) {
+    widgets.forEach(w => w.inputs.forEach(input => {input.disabled=!enabled;}));
+    document.querySelectorAll('[data-exploration]').forEach(b => {b.disabled=!enabled;});
+    byId('reset').disabled=!enabled;
+    byId('presentation-status').hidden=enabled || !experienceUI?.active;
+  }
+  function draw() {
+    const spec=visuals[selected]; byId('main-visual').replaceChildren(V.render(spec,values,ir,affected));
+    byId('main-visual').dataset.visualId=payload.visual_ids[ir.visuals.indexOf(spec)];
+    byId('main-visual').setAttribute('aria-labelledby',`visual-tab-${selected}`);
+    text('visual-caption',evaluator?.evaluate ? 'Change an input to observe the result.' : 'Reference values · editing is unavailable in this preview.');
+    byId('intermediate-values').replaceChildren();
+    const stories=experiencePlan?.calculation_story || [];
+    const ordered=[...stories.map(s=>nodes.find(n=>n.id===s.node)),...nodes.filter(n=>n.display && !stories.some(s=>s.node===n.id))];
+    ordered.forEach(n => {
+      const story=stories.find(s=>s.node===n.id);
+      const card=el('div',null,'panel intermediate-card');card.dataset.node=n.id;card.append(el('h3',n.label || n.id));
+      card.append(story ? V.render({type:story.presentation==='metric' ? 'number' : story.presentation,value:n.id,title:n.label || n.id},values,ir,affected) : Array.isArray(values[n.id]) ? V.table(values[n.id],n.id) : el('div',V.format(values[n.id]),'big-value'));
+      if(story?.annotation)card.append(el('p',story.annotation,'calculation-annotation'));
+      byId('intermediate-values').append(card);
+    });
+    if(stories.length) {
+      byId('intermediate-values').classList.add('calculation-sequence');
+      const cards=[...byId('intermediate-values').children];
+      stories.forEach((story,index)=>{
+        const card=cards[index];
+        if(experiencePlan.emphasis_nodes?.includes(story.node))card.classList.add('emphasized-node');
+        if(affected.has(story.node))card.classList.add('changed-node');
+        if(index && dependencyPath([stories[index-1].node]).has(story.node)) {
+          const arrow=el('span','→','calculation-arrow');arrow.setAttribute('aria-label',`${nodes.find(n=>n.id===stories[index-1].node)?.label || stories[index-1].node} influences ${nodes.find(n=>n.id===story.node)?.label || story.node}`);
+          card.prepend(arrow);
+        }
+        if(affected.has(story.node) && JSON.stringify(beforeValues[story.node])!==JSON.stringify(values[story.node]))card.append(el('p',deltaDescription(beforeValues[story.node],values[story.node]),'value-change'));
+      });
+    }
+    byId('dependency-graph').replaceChildren(V.pipeline(ir,values,null,affected));
+    experienceUI?.update({values,baseline,before:beforeValues,affected});
+  }
+  function deltaDescription(before,after) {
+    if(typeof before==='number' && typeof after==='number')return `${V.format(before)} → ${V.format(after)} (Δ ${V.format(after-before)})`;
+    if(Array.isArray(before) && Array.isArray(after)) {
+      const a=before.flat(Infinity),b=after.flat(Infinity);
+      if(a.length!==b.length)return `Size changed: ${a.length} → ${b.length} entries`;
+      const deltas=b.map((v,i)=>typeof v==='number' && typeof a[i]==='number' ? Math.abs(v-a[i]) : null).filter(v=>v != null);
+      const count=b.filter((v,i)=>JSON.stringify(v)!==JSON.stringify(a[i])).length;
+      return `${count} of ${b.length} entries changed${deltas.length ? ` · largest |Δ| ${V.format(Math.max(...deltas))}` : ''}`;
+    }
+    return `${V.format(before)} → ${V.format(after)}`;
+  }
+  function drawChanges(previous,next) {
+    byId('change-path').replaceChildren();
+    const ids=[...(ir.controls || []).map(c=>c.id),...nodes.filter(n=>n.display).map(n=>n.id)];
+    const changedIds=ids.filter(id=>affected.has(id) && JSON.stringify(previous[id])!==JSON.stringify(next[id]));
+    changedIds.forEach((id,index)=>{
+      const label=[...(ir.controls || []),...nodes].find(n=>n.id===id)?.label || id;
+      const row=el('div',null,'delta-step');row.dataset.node=id;
+      const predecessor=changedIds.slice(0,index).reverse().find(source=>dependencyPath([source]).has(id));
+      if(predecessor) {
+        const from=[...(ir.controls || []),...nodes].find(n=>n.id===predecessor)?.label || predecessor;
+        row.append(el('small',`${from} → ${label}`,'causal-link'));
+      }
+      row.append(el('strong',label),el('span',deltaDescription(previous[id],next[id])));
+      const meaning=experiencePlan?.calculation_story.find(s=>s.node===id)?.meaning;
+      if(meaning)row.append(el('small',meaning));byId('change-path').append(row);
+    });
+    byId('before-after').hidden=false;byId('before-after-values').replaceChildren();
+    for(const [label,snapshot] of [['Before your change',previous],['After your change',next]]) {
+      const column=el('div');column.append(el('h4',label));
+      (ir.computation?.outputs || []).forEach(id=>{
+        column.append(Array.isArray(snapshot[id]) ? V.table(snapshot[id],id) : el('p',`${id}: ${V.format(snapshot[id])}`));
+      });byId('before-after-values').append(column);
+    }
+  }
+  function compare(previous,next) {
+    return (ir.computation?.outputs || []).filter(id => JSON.stringify(previous[id]) !== JSON.stringify(next[id])).map(id => {
+      const label=nodes.find(n => n.id === id)?.label || id;
+      return Array.isArray(next[id]) ? `${label} updated` : `${label}: ${V.format(previous[id])} → ${V.format(next[id])}`;
+    }).join('; ') || 'The displayed outputs stayed the same.';
+  }
+  async function change(patch,label,reset = false) {
+    if(!evaluator?.evaluate)return;
+    const ticket=++revision, previousValues=clone(values), previousState=clone(state);
+    const proposed=reset ? defaults() : {...desiredState,...clone(patch)};
+    desiredState=clone(proposed);widgets.forEach(w => w.sync());
+    error('');
+    try {
+      const result=await evaluator.evaluate(ir,clone(proposed));
+      if(ticket !== revision)return;
+      if(!result || typeof result !== 'object' || Array.isArray(result))throw new Error('The computation runtime must return a values object.');
+      state=proposed;values={...state,...result};beforeValues=previousValues;
+      const changedControls=Object.keys(state).filter(id=>JSON.stringify(previousState[id])!==JSON.stringify(state[id]));
+      affected=new Set([...dependencyPath(changedControls)].filter(id=>JSON.stringify(previousValues[id])!==JSON.stringify(values[id])));
+      if(label==='Initial values')baseline=clone(values);
+      widgets.forEach(w => w.sync());draw();
+      text('change-summary',label==='Initial values' ? 'Change an input to follow its effect through the calculation. Your previous and current results will appear here.' : `${label}. ${compare(previousValues,values)}`);
+      if(label!=='Initial values')drawChanges(previousValues,values);
+    } catch(e) {
+      if(ticket !== revision)return;
+      state=previousState;desiredState=clone(state);widgets.forEach(w => w.sync());
+      error(`${e.message || 'The calculation could not be completed.'} Previous values are preserved. Adjust the controls and try again.`);
+    }
+  }
+  function activateTab(i,focus=false) {
+    selected=i;document.querySelectorAll('[role=tab]').forEach((b,j) => {b.setAttribute('aria-selected',String(i===j));b.tabIndex=i===j ? 0 : -1;if(focus && i===j)b.focus();});draw();
+  }
+  visuals.forEach((v,i) => {
+    const button=el('button',v.title || v.type,'tab');button.id=`visual-tab-${i}`;button.type='button';button.setAttribute('role','tab');button.setAttribute('aria-controls','main-visual');button.setAttribute('aria-selected',String(i===0));button.tabIndex=i===0 ? 0 : -1;
+    button.addEventListener('click',() => activateTab(i));button.addEventListener('keydown',e => {let next;if(e.key === 'ArrowRight')next=(i+1)%visuals.length;if(e.key === 'ArrowLeft')next=(i+visuals.length-1)%visuals.length;if(e.key === 'Home')next=0;if(e.key === 'End')next=visuals.length-1;if(next != null){e.preventDefault();activateTab(next,true);} });byId('visual-tabs').append(button);
+  });
+  (ir.explorations || []).forEach((exploration,i) => {
+    const card=el('article',null,'panel exploration-card'), head=el('div',null,'exploration-header');
+    card.dataset.experienceTarget=`exploration_${i}`;
+    head.append(el('span',i+1,'exploration-number'),el('h3',exploration.title));card.append(head);
+    const explanation=el('dl',null,'exploration-description');
+    for(const [label,description] of [['Change',exploration.change?.instructions],['Observe',exploration.observe],['Why',exploration.why]])explanation.append(el('dt',label),el('dd',description));
+    card.append(explanation);
+    const button=el('button','Try this setup ↗','quiet-button');button.dataset.exploration=i;
+    button.addEventListener('click',() => {
+      // Each exploration starts from defaults; its expectation refers to that
+      // baseline, rather than arbitrary edits left by a previous exploration.
+      const setup={...defaults(),...clone(exploration.change?.suggested_values || {})};
+      change(setup,`Applied: ${exploration.title}`);
+    }); card.append(button);byId('exploration-cards').append(card);
+  });
+  (ir.controls || []).forEach(addControl);
+  experienceUI=global.PlaygroundExperience.create(payload,ir,V,{widgets,getValues:()=>values,dependencyPath,
+    calculationSteps:()=>byId('intermediate-values').cloneNode(true)});
+  byId('reset').addEventListener('click',() => change(defaults(),'Reset to the original values',true));
+  function setEvaluator(next) { evaluator=next;interactive(Boolean(evaluator?.evaluate));if(evaluator?.evaluate) return change(defaults(),'Initial values',true); }
+  global.PlaygroundUI={setEvaluator,getState:() => clone(state),getValues:() => clone(values),dependencyPath};
+  draw();interactive(Boolean(evaluator?.evaluate));
+  if(evaluator?.evaluate)change(defaults(),'Initial values',true);
+  else { text('change-summary','Reference setup shown. Connect evaluated results to explore changes.'); }
+})(globalThis);
+</script>
+</body>
+</html>

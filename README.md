@@ -54,6 +54,8 @@ teaching notes to exercise scientifically different mechanisms. They are not
 claimed to be excerpts from research papers. The browser tests generate example
 outputs in `out/browser/` using explicitly mocked model responses.
 
+A committed live example pairs the [supplied Bayesian input](examples/cases/bayesian-odds-supplied.json) with its [standalone HTML output](examples/outputs/bayesian-odds.html). It used the development model and reached FULL_SUCCESS on one semantic call. The reusable generator uses the same scientific schema and runtime for all inputs; paper-specific expected answers exist only in tests.
+
 The rendered page contains concept orientation, input controls, a primary figure,
 intermediate computations, What Changed, explorations, limitations, and grounding.
 The HTML embeds all code/data/styles, needs no API key or network, and recomputes
@@ -69,8 +71,8 @@ using the fixed scientific interpreter rather than generated executable code.
 
 The pipeline is `case -> source -> focused evidence -> generated IR -> scientific
 validation/repair -> DerivedPlayground -> HTML -> artifact checks`. Default limits
-include one generation plus at most one repair, 570 seconds, 30,000 completion
-tokens, and bounded HTTP attempts. Token usage, model IDs, latency, validation,
+include one generation plus at most one targeted repair or compact regeneration, 570 seconds, 30,000 total completion
+tokens, and bounded HTTP attempts. Generation uses the remaining total token budget; there is no 8,000-token per-call cap. Token usage, model IDs, latency, validation,
 rendering, artifact checks, and final status are written to the redacted JSONL trace.
 
 Scientific computations are declarative data interpreted by trusted code. Models

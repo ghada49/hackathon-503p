@@ -19,7 +19,7 @@ from playground.artifact import validate_artifact
 
 _OUTPUTS = ('spec.json', 'source_blocks.json', 'source_document.json', 'trace.jsonl',
             'validation.json', 'derived_playground.json', 'candidate.json',
-            'resolution.json', 'index.html')
+            'resolution.json', 'candidates.json', 'index.html')
 
 
 def prepare_output_dir(path: str | Path) -> Path:
@@ -76,6 +76,7 @@ def run(input_path: str | Path, output_path: str | Path, model: str, *,
         if scientific:
             from playground.orchestration import compile_scientific_spec
             result = compile_scientific_spec(client, evidence, case, operations=operations, max_prompt_chars=context_max_chars)
+            _write_json(output / 'candidates.json', trace.sanitize(getattr(result, 'candidates', {})))
             spec = result.spec
             success = result.accepted
             reason = result.reason

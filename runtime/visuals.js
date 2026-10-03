@@ -10,6 +10,7 @@
     const rows = Array.isArray(value[0]) ? value : [value];
     if (rows.some(row => !Array.isArray(row) || row.length !== rows[0].length)) throw new Error('Expected a rectangular matrix');
     const wrap = el('div', null, 'heatmap-wrap');
+    wrap.tabIndex=0;wrap.setAttribute('role','region');wrap.setAttribute('aria-label',title || 'Scrollable values');
     const t = el('table', null, `data-table${heatmap ? ' heatmap' : ''}`);
     t.append(el('caption', title));
     const head = el('tr'); head.append(el('th', ''));

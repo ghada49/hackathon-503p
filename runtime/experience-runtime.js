@@ -12,8 +12,13 @@
   };
   function create(payload,ir,V,context) {
     const compiled=payload.experience;
-    if(compiled?.mode !== 'directed')return {update:()=>{},active:false};
-    const plan=compiled.plan, tasks=[],controls=context.widgets;
+    const directed=compiled?.mode === 'directed';
+    const plan=directed ? {...compiled.plan,guided_mode:[...compiled.plan.guided_mode]} : {guided_mode:[],annotations:[]};
+    (ir.explorations || []).forEach((exploration,index)=>plan.guided_mode.push({
+      target:`exploration_${index}`,explorationIndex:index,
+      instruction:`${exploration.title}. ${exploration.change.instructions} ${exploration.observe} ${exploration.why}`
+    }));
+    const tasks=[],controls=context.widgets;
     const registry=new Map();
     (ir.visuals || []).forEach((v,i)=>{let key=compiled.contract==='shared' ? payload.visual_ids[i] : v.id || v.value || `${v.type}_${i}`;if(registry.has(key))key=`${key}_${i}`;registry.set(key,v);});
     const componentIds={teaching:'overview',idea:'idea',why:'why',mental_model:'mental-model',symbols:'symbols',
@@ -61,6 +66,8 @@
     }
     function showGuide(index) {
       guideIndex=index;byId('guided-walkthrough').hidden=false;
+      const step=plan.guided_mode[index];
+      if(Number.isInteger(step.explorationIndex))document.querySelector(`[data-exploration="${step.explorationIndex}"]`)?.click();
       document.body.classList.add('guide-active');
       byId('guide-start').hidden=true;
       byId('guide-progress').textContent=`Step ${index+1} of ${plan.guided_mode.length}`;
@@ -142,6 +149,7 @@
       return {update:()=>{},active:false};
     }
     try {
+      if(directed) {
       byId('experience-stage').append(build(plan.tree));byId('experience-stage').hidden=false;
       byId('experience-stage').className=`experience-stage density-${plan.density}`;
       byId('canonical-stage').hidden=true;
@@ -159,6 +167,7 @@
         tasks.push(({values})=>{card.hidden=!condition(note.when,values);});
       });
       byId('experience-annotations').hidden=!plan.annotations.length;
+      }
       if(plan.guided_mode.length) {
         byId('guide-start').hidden=false;
         byId('guide-start').addEventListener('click',()=>showGuide(0));
@@ -171,10 +180,10 @@
         if(!controller.active)return;
         try {
           tasks.forEach(task=>task(data));
-          targets().forEach(n=>{
-            n.classList.toggle('primary-visual',n.dataset.experienceTarget===plan.primary_visual);
-            n.closest('.experience-component')?.classList.toggle('primary-component',n.dataset.experienceTarget===plan.primary_visual);
-            n.classList.toggle('emphasized-node',plan.emphasis_nodes?.includes(n.dataset.node || n.dataset.experienceTarget));
+          if(directed)targets().forEach(n=>{
+            n.classList.toggle('primary-visual',Boolean(plan.primary_visual && n.dataset.experienceTarget===plan.primary_visual));
+            n.closest('.experience-component')?.classList.toggle('primary-component',Boolean(plan.primary_visual && n.dataset.experienceTarget===plan.primary_visual));
+            n.classList.toggle('emphasized-node',Boolean(plan.emphasis_nodes?.includes(n.dataset.node || n.dataset.experienceTarget)));
           });
           guideHighlight(false);
         } catch(_) {fallback();controller.active=false;}

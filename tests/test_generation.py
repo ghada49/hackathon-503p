@@ -100,6 +100,8 @@ def test_explicit_unsupported_schema_falls_back_same_intent(context):
     generate_spec(client, evidence(), case(), ir_model=FakeIR)
     assert http.payloads[0]['response_format']['type'] == 'json_schema'
     assert 'response_format' not in http.payloads[1]
+    assert 'provider' not in http.payloads[1]
+    assert 'OUTPUT_SCHEMA\n' in http.payloads[1]['messages'][0]['content']
     assert {p['model'] for p in http.payloads} == {'exact'}
     assert budget.semantic_calls == 1
 
@@ -112,11 +114,25 @@ def test_retry_attempt_bound(context):
     assert budget.http_requests == 3
 
 
+def test_unsupported_reasoning_preserves_schema_and_exact_model(context):
+    budget, trace = context
+    http = FakeHTTP(response(status=400, error='reasoning is not supported'), response())
+    client = OpenRouterClient('exact', budget, trace, session=http, sleep=lambda _: None)
+    generate_spec(client, evidence(), case(), ir_model=FakeIR)
+    assert http.payloads[0]['reasoning'] == {'effort': 'low', 'exclude': True}
+    assert 'reasoning' not in http.payloads[1]
+    assert http.payloads[1]['response_format'] == http.payloads[0]['response_format']
+    assert {p['model'] for p in http.payloads} == {'exact'}
+    assert budget.semantic_calls == 1
+
+
 def test_transport_unknown_usage_is_reserved(context):
     budget, trace = context
     client = OpenRouterClient('exact', budget, trace, session=FakeHTTP(requests.Timeout(), response()), sleep=lambda _: None)
-    generate_spec(client, evidence(), case(), ir_model=FakeIR)
-    assert budget.completion_tokens_total == 15030
+    with pytest.raises(BudgetExceeded, match='Completion token budget exhausted'):
+        generate_spec(client, evidence(), case(), ir_model=FakeIR)
+    assert budget.completion_tokens_total == 30000
+    assert budget.http_requests == 1
 
 
 def test_schema_failure_exposes_candidate_exact_paths(context):
@@ -200,7 +216,7 @@ def test_completion_without_usage_reserves_requested_tokens(context):
     budget, trace = context
     client = OpenRouterClient('exact', budget, trace, session=FakeHTTP(response(usage=False)))
     generate_spec(client, evidence(), case(), ir_model=FakeIR)
-    assert budget.completion_tokens_total == 15000
+    assert budget.completion_tokens_total == 30000
 
 
 def test_deadline_rechecked_after_http(context):

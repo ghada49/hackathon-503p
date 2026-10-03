@@ -18,7 +18,8 @@ class TraceLogger:
 
     def sanitize(self, value):
         if isinstance(value, dict):
-            return {str(k): '[REDACTED]' if _PRIVATE.search(str(k)) else self.sanitize(v) for k, v in value.items()}
+            return {str(k): v if k == 'reasoning_tokens' and type(v) is int and v >= 0 else
+                    '[REDACTED]' if _PRIVATE.search(str(k)) else self.sanitize(v) for k, v in value.items()}
         if isinstance(value, (list, tuple)):
             return [self.sanitize(v) for v in value]
         if isinstance(value, str):
