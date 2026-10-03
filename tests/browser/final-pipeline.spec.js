@@ -2,11 +2,51 @@ const {test,expect}=require('@playwright/test');
 const {execFileSync}=require('node:child_process');
 const {resolve}=require('node:path');
 const {pathToFileURL}=require('node:url');
-const {existsSync}=require('node:fs');
+const {existsSync,readFileSync}=require('node:fs');
 
 test.beforeAll(()=>{
   const venv=resolve('.venv/Scripts/python.exe');
   execFileSync(process.env.PYTHON || (existsSync(venv)?venv:'python'),['tests/make_browser_artifacts.py']);
+});
+
+test('safe partial opens offline, recomputes, and remains unsuccessful in diagnostics',async({page,context})=>{
+  await context.setOffline(true);
+  const errors=[],requests=[];
+  page.on('pageerror',e=>errors.push(e.message));
+  page.on('request',r=>{if(/^https?:/.test(r.url()))requests.push(r.url());});
+  const directory=resolve('out/browser/generic-partial');
+  await page.goto(pathToFileURL(resolve(directory,'index.html')).href);
+  await expect(page.locator('#runtime-error')).toBeHidden();
+  const before=await page.evaluate(()=>PlaygroundUI.getValues().posterior);
+  await page.getByLabel('Prior probability',{exact:true}).fill('0.6');
+  await expect.poll(()=>page.evaluate(()=>PlaygroundUI.getValues().posterior)).not.toBe(before);
+  expect(JSON.parse(readFileSync(resolve(directory,'resolution.json'),'utf8')).status).toBe('USABLE_PARTIAL');
+  const events=readFileSync(resolve(directory,'trace.jsonl'),'utf8').trim().split('\n').map(JSON.parse);
+  expect(events.at(-1).result.success).toBe(false);
+  expect(events.at(-1).result.disposition).toBe('USABLE_PARTIAL');
+  expect(errors).toEqual([]);expect(requests).toEqual([]);
+});
+
+test('source excerpts include evidence and mechanism blocks once in supplied order',async({page,context})=>{
+  await context.setOffline(true);
+  const html=readFileSync(resolve('out/browser/generic-canonical/index.html'),'utf8');
+  const pattern=/(<script type="application\/json" id="playground-data">)([\s\S]*?)(<\/script>)/;
+  const modified=html.replace(pattern,(_,start,json,end)=>{
+    const payload=JSON.parse(json);
+    payload.ir.evidence=[{id:'claim',claim:'Evidence claim remains visible.',blocks:['b1','b1']}];
+    payload.ir.mechanism_grounding=[{nodes:['posterior'],blocks:['b2','b1','absent'],relationship:'Equation grounding.'}];
+    payload.source.blocks=[{id:'b2',type:'equation',text:'Mechanism-only equation.',order:0},
+      {id:'b1',type:'paragraph',text:'Evidence paragraph.',order:1},
+      {id:'b3',type:'paragraph',text:'Unreferenced text.',order:2}];
+    return start+JSON.stringify(payload)+end;
+  });
+  expect(modified).not.toBe(html);
+  await page.setContent(modified);
+  const excerpts=page.locator('#source-excerpts .source-excerpt');
+  await expect(excerpts).toHaveCount(2);
+  await expect(excerpts.nth(0)).toContainText('Mechanism-only equation.');
+  await expect(excerpts.nth(1)).toContainText('Evidence paragraph.');
+  await expect(page.locator('#evidence')).toContainText('Evidence claim remains visible.');
 });
 
 for(const name of ['attention','entropy','generic'])for(const mode of ['canonical','shared','invalid']){

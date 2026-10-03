@@ -135,20 +135,64 @@ def test_frozen_derivation_without_recovery_visuals_keeps_original_figures():
     assert '"mode": "directed"' in render(derived)
 
 
-def test_partial_recovery_retains_diagnostics_without_reporting_full_success(tmp_path, monkeypatch):
+@pytest.mark.parametrize('problem', [None, 'boundary', 'invariant', 'test', 'grounding',
+    'dependency', 'nonfinite', 'exploration', 'missing_derived', 'unknown_failure',
+    'fatal', 'no_visual', 'unusable', 'render', 'validate', 'runtime_file', 'spent_tokens'])
+def test_partial_packaging_requires_safe_science(tmp_path, monkeypatch, problem):
+    import agent
     from playground.orchestration import resolve_candidate, CompilationResult
-    from playground.models import SourceBlock
+    from playground.models import SourceBlock, ValidationFailure
     spec = json.loads((Path(__file__).parent / 'fixtures/generic_ir.json').read_text())
     spec['explorations'] = spec['explorations'][:1]
     ids = {b for item in spec['evidence'] + spec['mechanism_grounding'] for b in item['blocks']}
     source = [SourceBlock(id=b, type='paragraph', text='Posterior odds combine prior odds and evidence.', order=i)
               for i, b in enumerate(sorted(ids))]
+    if problem == 'boundary':
+        spec['controls'][0]['max'] = 1
+    elif problem == 'invariant':
+        spec['invariants'][0]['assertion']['expected'] = [-2, -1]
+    elif problem == 'test':
+        spec['tests'][0]['assertions'][0]['expected'] = 99
+    elif problem == 'grounding':
+        source = []
+    elif problem == 'dependency':
+        spec['computation']['nodes'][0]['inputs'] = [{'ref': 'missing'}, {'const': 1}]
+    elif problem == 'nonfinite':
+        spec['computation']['nodes'][0].update(op='exp', inputs=[{'const': 1000}])
+    elif problem == 'exploration':
+        spec['explorations'][0]['change']['suggested_values']['prior'] = 1
     resolution = resolve_candidate(spec, source)
-    assert resolution.status == 'USABLE_PARTIAL'
     assessment = resolution.assessment
-    monkeypatch.setattr('playground.orchestration.compile_scientific_spec', lambda *args, **kwargs:
-        CompilationResult(assessment.spec, assessment.validation, assessment.derived, False,
-                          reason='Partial quality requirements', resolution=resolution.metadata()))
+    metadata = resolution.metadata()
+    if problem == 'unknown_failure':
+        assessment.validation.failures.append(ValidationFailure(check='future_runtime_failure',
+            severity='serious', message='Unknown failure', repairable=False))
+    elif problem == 'fatal':
+        assessment.validation.failures.append(ValidationFailure(check='exploration_count',
+            severity='fatal', message='Fatal failure must never be allowlisted', repairable=False))
+    elif problem == 'no_visual':
+        metadata['minima']['meaningful_visual'] = False
+    elif problem == 'unusable':
+        metadata['status'] = 'UNUSABLE'
+    if problem == 'runtime_file':
+        original_read = Path.read_text
+        def read_without_runtime(path, *args, **kwargs):
+            if path.name == 'computation.js':
+                raise FileNotFoundError('Required scientific runtime unavailable')
+            return original_read(path, *args, **kwargs)
+        monkeypatch.setattr(Path, 'read_text', read_without_runtime)
+    if problem in ('render', 'validate'):
+        def fail(*args, **kwargs):
+            (tmp_path / 'output/index.html').write_text('incomplete page')
+            raise ValueError('Artifact packaging failed')
+        monkeypatch.setattr(agent, 'validate_artifact' if problem == 'validate' else 'render_to_file', fail)
+    def compile_result(client, *args, **kwargs):
+        if problem == 'spent_tokens':
+            client.budget.completion_tokens_total = 30000
+        return CompilationResult(assessment.spec, assessment.validation,
+            None if problem == 'missing_derived' else assessment.derived, False,
+            reason='Partial quality requirements', resolution=metadata)
+    monkeypatch.setattr('playground.orchestration.compile_scientific_spec', compile_result)
     case = tmp_path / 'case.json'
     case.write_text(json.dumps({'source_url': 'paper', 'focus': 'odds', 'audience': 'students',
         'excerpt': 'Posterior odds combine prior odds and evidence.'}))
@@ -156,8 +200,15 @@ def test_partial_recovery_retains_diagnostics_without_reporting_full_success(tmp
     output.mkdir()
     (output / 'index.html').write_text('stale success')
     assert run(case, output, 'integration/test-model') == 1
-    assert json.loads((output / 'resolution.json').read_text())['status'] == 'USABLE_PARTIAL'
-    assert (output / 'derived_playground.json').is_file()
-    assert not (output / 'index.html').exists()
+    assert json.loads((output / 'resolution.json').read_text())['status'] == metadata['status']
+    assert (output / 'validation.json').is_file()
+    assert (output / 'index.html').exists() == (problem in (None, 'spent_tokens'))
+    if problem in (None, 'spent_tokens'):
+        assert metadata['status'] == 'USABLE_PARTIAL'
+        assert (output / 'derived_playground.json').is_file()
+        assert validate_artifact(output / 'index.html')['required_sections']
     events = [json.loads(line) for line in (output / 'trace.jsonl').read_text().splitlines()]
     assert events[-1]['result']['success'] is False
+    assert events[-1]['result']['disposition'] == metadata['status']
+    packaging = next(e['result'] for e in events if e['action'] == 'partial_packaging')
+    assert packaging['failures'] == [f.model_dump(mode='json') for f in assessment.validation.failures]

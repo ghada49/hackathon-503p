@@ -41,6 +41,27 @@ def _write_json(path: Path, data) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, allow_nan=False, indent=2) + '\n', encoding='utf-8')
 
 
+def _safe_partial(result) -> bool:
+    """Package only partials with verified science and known teaching shortfalls."""
+    resolution = result.resolution or {}
+    if resolution.get('status') != 'USABLE_PARTIAL' or result.derived is None or result.validation is None:
+        return False
+    minima = resolution.get('minima', {})
+    if not all(minima.get(key) is True for key in (
+            'executable', 'grounded', 'scientific_checks_pass', 'meaningful_visual', 'explanation_present')):
+        return False
+    summary = result.validation.rubric_summary
+    if not all((summary.get(section) or {}).get(key) is True for section, key in (
+            ('scientific', 'computation_executes'), ('scientific', 'verification_passed'),
+            ('interaction', 'boundary_tests_pass'))):
+        return False
+    # Unknown failures fail closed. In particular, exploration errors can mean
+    # invalid preset execution or failed scientific expectations, not just prose.
+    teaching_shortfalls = {'control_count', 'control_influence', 'control_visible_influence', 'exploration_count'}
+    return all(f.severity != 'fatal' and f.check in teaching_shortfalls
+               for f in result.validation.failures)
+
+
 def run(input_path: str | Path, output_path: str | Path, model: str, *,
         session=None, ir_model=None, operations=None, allow_url: bool = False,
         context_max_chars: int = DEFAULT_CONTEXT_CHARS) -> int:
@@ -50,6 +71,7 @@ def run(input_path: str | Path, output_path: str | Path, model: str, *,
     reason = None
     output = None
     scientific = False
+    disposition = None
     try:
         case = load_case(input_path)
         output = prepare_output_dir(output_path)
@@ -80,6 +102,7 @@ def run(input_path: str | Path, output_path: str | Path, model: str, *,
             spec = result.spec
             success = result.accepted
             reason = result.reason
+            disposition = (result.resolution or {}).get('status', 'FULL_SUCCESS' if success else 'UNUSABLE')
             if result.resolution is not None:
                 _write_json(output / 'resolution.json', result.resolution)
             if result.validation is not None:
@@ -122,16 +145,25 @@ def run(input_path: str | Path, output_path: str | Path, model: str, *,
             trace.log('output', 'write_ir', dict(schema_valid=True, scientific_acceptance=success if scientific else None, artifact='spec.json'))
         elif spec is not None:
             _write_json(output / 'candidate.json', spec)
-        if scientific and success:
+        safe_partial = scientific and not success and _safe_partial(result)
+        if scientific and not success:
+            trace.log('artifact', 'partial_packaging', dict(disposition=disposition,
+                eligible=safe_partial, failures=[f.model_dump(mode='json') for f in result.validation.failures]
+                if result.validation is not None else [], resolution=result.resolution))
+        if scientific and (success or safe_partial):
             if result.derived is None:
                 raise ValueError('Accepted scientific candidate has no executable derivation')
-            budget.check_available()
+            # Packaging consumes no model tokens; an exhausted completion budget
+            # must not discard an otherwise safe retained partial.
+            if success or budget.remaining_seconds <= 0:
+                budget.check_available()
             try:
                 render_to_file(result.derived, output / 'index.html', source=metadata)
-                trace.log('artifact', 'render_html', dict(success=True, artifact='index.html'))
+                trace.log('artifact', 'render_html', dict(success=True, artifact='index.html', disposition=disposition))
                 checks = validate_artifact(output / 'index.html')
                 trace.log('artifact', 'validate_html', dict(success=True, **checks))
-                budget.check_available()
+                if success or budget.remaining_seconds <= 0:
+                    budget.check_available()
             except Exception:
                 trace.log('artifact', 'failed', dict(success=False, artifact='index.html'))
                 raise
@@ -169,7 +201,7 @@ def run(input_path: str | Path, output_path: str | Path, model: str, *,
     finally:
         if trace:
             try:
-                trace.log('finalize', 'complete', dict(success=success, reason=reason, **budget.totals()))
+                trace.log('finalize', 'complete', dict(success=success, reason=reason, disposition=disposition, **budget.totals()))
             finally:
                 trace.close()
     return 0 if success else 1

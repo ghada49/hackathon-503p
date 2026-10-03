@@ -37,7 +37,7 @@
   if(source.section)sourceText.append(el('p',source.section));
   byId('source-card').append(sourceText);
   const sourceBlocks=Array.isArray(source.blocks) ? source.blocks : [];
-  const evidenceIds=new Set((ir.evidence || []).flatMap(e=>e.blocks || []));
+  const evidenceIds=new Set([...(ir.evidence || []),...(ir.mechanism_grounding || [])].flatMap(e=>e.blocks || []));
   sourceBlocks.filter(block=>evidenceIds.has(block.id)).forEach(block=>{
     const card=el('article',null,'source-excerpt');
     card.append(el('h4',block.section || 'From the provided excerpt'));
