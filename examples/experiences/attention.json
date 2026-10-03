@@ -1,0 +1,26 @@
+{
+  "story": "input_to_output",
+  "hero_visual": "weights",
+  "presentation": {"density": "focused", "interaction_style": "stepwise"},
+  "tree": {"type": "stack", "children": [
+    {"type": "control_group", "controls": ["Q", "K", "V", "use_scaling"]},
+    {"type": "grid", "columns": 2, "children": [
+      {"type": "visual", "visual": "weights"},
+      {"type": "visual", "visual": "attention_output"}
+    ]}
+  ]},
+  "calculation_story": [
+    {"node": "scores", "presentation": "matrix", "annotation": "First compare each query with every key.", "meaning": "Query–key similarity"},
+    {"node": "scaled_scores", "presentation": "matrix", "annotation": "Inspect the scores passed to softmax. The scaling checkbox chooses whether to divide by √dₖ."},
+    {"node": "weights", "presentation": "heatmap", "annotation": "Each row shows how strongly a query attends to each key.", "meaning": "How strongly each value is attended to"},
+    {"node": "attention_output", "presentation": "matrix", "annotation": "The attention weights determine how the value rows are combined."}
+  ],
+  "guided_mode": [
+    {"focus": "Q", "message": "Try increasing the first entry of the query matrix. You can edit the controls throughout this guide."},
+    {"focus": "weights", "message": "Compare the attention weights before and after your edit."},
+    {"focus": "attention_output", "message": "Inspect how the weighted output changed. The calculation steps explain the path."}
+  ],
+  "annotations": [
+    {"target": "weights", "kind": "callout", "text": "Darker cells represent larger attention weights. Numeric labels show the exact values."}
+  ]
+}

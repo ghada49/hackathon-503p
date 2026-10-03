@@ -1,0 +1,29 @@
+{
+  "story": "equation_to_effect",
+  "hero_visual": "posterior_distribution",
+  "presentation": {"density": "comfortable", "comparison_mode": true},
+  "tree": {"type": "equation_first", "children": [
+    {"type": "formula", "visual": "formula_0"},
+    {"type": "split", "ratio": "40/60", "children": [
+      {"type": "control_group", "controls": ["prior", "likelihood_ratio"]},
+      {"type": "stack", "children": [
+        {"type": "visual", "visual": "posterior_distribution"},
+        {"type": "visual", "visual": "pipeline_1"}
+      ]}
+    ]},
+    {"type": "comparison", "visual": "posterior_distribution"}
+  ]},
+  "calculation_story": [
+    {"node": "prior_odds", "presentation": "metric", "annotation": "Convert the prior probability into odds."},
+    {"node": "posterior_odds", "presentation": "metric", "annotation": "The likelihood ratio multiplies those odds."},
+    {"node": "posterior", "presentation": "metric", "annotation": "Convert the updated odds back to probability.", "meaning": "Belief in the hypothesis after this evidence"}
+  ],
+  "guided_mode": [
+    {"target": "likelihood_ratio", "instruction": "Set the likelihood ratio to 1 for neutral evidence."},
+    {"target": "posterior_odds", "instruction": "Inspect the updated odds in the calculation story."},
+    {"target": "posterior_distribution", "instruction": "Compare the posterior belief with the original setup."}
+  ],
+  "annotations": [
+    {"target": "posterior", "text": "The posterior is now above 0.8 in this teaching example.", "when": {"value": "posterior", "op": "greater_than", "threshold": 0.8}}
+  ]
+}

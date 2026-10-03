@@ -1,0 +1,8 @@
+.agents/skills/
+__pycache__/
+*.pyc
+out/
+node_modules/
+test-results/
+debug.log
+.venv/
