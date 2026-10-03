@@ -16,11 +16,11 @@ from pydantic import ValidationError
 from playground.budget import BudgetExceeded, BudgetManager, MAX_HTTP_ATTEMPTS_PER_SEMANTIC_CALL, call_with_timeout
 from playground.trace import TraceLogger
 from playground.retrieval import DEFAULT_CONTEXT_CHARS, source_context_payload
+from playground.computation import OPERATIONS
 
 ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions'
 PROMPTS = Path(__file__).resolve().parent.parent / 'prompts'
-# Frozen spec vocabulary, replaceable with Person 2's implemented registry.
-CORE_OPERATIONS = tuple('add subtract multiply divide negate pow sqrt exp log log2 abs sin cos clip sum product mean min max argmin argmax dot matmul transpose index slice reshape flatten concat softmax softmax_rows normalize range cumsum difference equal not_equal less less_equal greater greater_equal and or not where map elementwise iterate scan'.split())
+CORE_OPERATIONS = tuple(OPERATIONS)
 CONTROL_TYPES = tuple('slider number checkbox select vector_editor matrix_editor sequence_editor'.split())
 VISUAL_TYPES = tuple('formula number table matrix heatmap bar_chart line_chart scatter vector pipeline nodes_edges scene'.split())
 SCENE_ELEMENTS = tuple('line arrow circle rect point polyline text axis group'.split())
@@ -98,7 +98,7 @@ def extract_json(text: str) -> dict:
 
 
 def _registry(operations=None) -> dict:
-    return dict(ALLOWED_OPERATIONS=list(CORE_OPERATIONS) if operations is None else _plain(operations),
+    return dict(ALLOWED_OPERATIONS={name: dict(arity=list(rule.arity), params=list(rule.params)) for name, rule in OPERATIONS.items()} if operations is None else _plain(operations),
                 ALLOWED_CONTROLS=CONTROL_TYPES, ALLOWED_VISUALS=VISUAL_TYPES,
                 ALLOWED_SCENE_ELEMENTS=SCENE_ELEMENTS)
 
@@ -442,7 +442,7 @@ def build_repair_context(candidate, failures, allowed_paths: list[str], focus_co
                        ('visuals', ('ALLOWED_VISUALS', 'ALLOWED_SCENE_ELEMENTS'))]:
         if any(path.split('.')[0] == root for path in allowed_paths):
             payload.update({key: registry[key] for key in keys})
-    if any(path.split('.')[0] == 'computation' and (path.endswith('.ref') or '.inputs' in path) for path in allowed_paths):
+    if any(path.split('.')[0] == 'computation' for path in allowed_paths):
         controls = original.get('controls')
         computation = original.get('computation')
         nodes = computation.get('nodes') if isinstance(computation, dict) else None

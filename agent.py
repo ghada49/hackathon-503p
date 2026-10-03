@@ -15,7 +15,8 @@ from playground.retrieval import DEFAULT_CONTEXT_CHARS, select_source_context
 from playground.source import load_case, normalize_source, resolve_source
 from playground.trace import TraceLogger
 
-_OUTPUTS = ('spec.json', 'source_blocks.json', 'source_document.json', 'trace.jsonl')
+_OUTPUTS = ('spec.json', 'source_blocks.json', 'source_document.json', 'trace.jsonl',
+            'validation.json', 'derived_playground.json', 'candidate.json')
 
 
 def prepare_output_dir(path: str | Path) -> Path:
@@ -66,32 +67,52 @@ def run(input_path: str | Path, output_path: str | Path, model: str, *,
             stages=evidence.stages, metadata=evidence.metadata, max_prompt_chars=context_max_chars,
             prompt_overhead_chars=overhead, block_count=len(evidence.blocks), block_ids=[b.id for b in evidence.blocks]))
         client = OpenRouterClient(model, budget, trace, session=session)
-        try:
-            spec = generate_spec(client, evidence, case, ir_model=shared, operations=operations, max_prompt_chars=context_max_chars)
-        except GenerationFailure as failure:
-            if not failure.allowed_paths:
-                raise
-            budget.check_available()
-            empty_candidate = failure.candidate is None
-            patch = repair_spec(client, failure.candidate or {}, failure.failures, failure.allowed_paths,
-                                evidence=evidence, case=case, ir_model=shared, operations=operations,
-                                allow_full_regeneration=empty_candidate, max_prompt_chars=context_max_chars)
-            candidate = apply_restricted_patch(failure.candidate or {}, patch, failure.allowed_paths,
-                                              protected_paths=('source_url', 'audience') if empty_candidate else ('schema_version', 'source_url', 'audience'),
-                                              allow_initial_missing_version=not empty_candidate and 'schema_version' in failure.allowed_paths and
-                                                  initial_missing_schema_version(failure.candidate, shared.model_json_schema()), ir_model=shared)
-            spec = validate_ir(candidate, shared)
-            trace.log('repair', 'accepted', dict(schema_valid=True))
-        # This is the Person 1 handoff, not scientific/artifact validation.
-        if budget.remaining_seconds <= 0:
-            budget.check_available()
+        from playground.models import PaperMechanismIR
+        scientific = shared is PaperMechanismIR
+        if scientific:
+            from playground.orchestration import compile_scientific_spec
+            result = compile_scientific_spec(client, evidence, case, operations=operations, max_prompt_chars=context_max_chars)
+            spec = result.spec
+            success = result.accepted
+            reason = result.reason
+            if result.validation is not None:
+                _write_json(output / 'validation.json', result.validation.model_dump(mode='json'))
+            if result.derived is not None:
+                _write_json(output / 'derived_playground.json', result.derived.model_dump(mode='json'))
+        else:
+            # Explicit injected models retain the original schema-only unit-test seam.
+            trace.log('generation', 'test_model_seam', dict(scientific_acceptance=False))
+            try:
+                spec = generate_spec(client, evidence, case, ir_model=shared, operations=operations, max_prompt_chars=context_max_chars)
+            except GenerationFailure as failure:
+                if not failure.allowed_paths:
+                    raise
+                budget.check_available()
+                empty_candidate = failure.candidate is None
+                patch = repair_spec(client, failure.candidate or {}, failure.failures, failure.allowed_paths,
+                                    evidence=evidence, case=case, ir_model=shared, operations=operations,
+                                    allow_full_regeneration=empty_candidate, max_prompt_chars=context_max_chars)
+                candidate = apply_restricted_patch(failure.candidate or {}, patch, failure.allowed_paths,
+                    protected_paths=('source_url', 'audience') if empty_candidate else ('schema_version', 'source_url', 'audience'),
+                    allow_initial_missing_version=not empty_candidate and 'schema_version' in failure.allowed_paths and
+                        initial_missing_schema_version(failure.candidate, shared.model_json_schema()), ir_model=shared)
+                spec = validate_ir(candidate, shared)
+                trace.log('repair', 'accepted', dict(schema_valid=True))
+            if budget.remaining_seconds <= 0:
+                budget.check_available()
+            success = True
         _write_json(output / 'source_blocks.json', dict(source_url=case.source_url, focus=case.focus,
                     audience=case.audience, blocks=[b.model_dump(mode='json') for b in blocks]))
         _write_json(output / 'source_document.json', document.model_dump(mode='json'))
-        _write_json(output / 'spec.json', spec.model_dump(mode='json'))
-        trace.log('output', 'write_ir', dict(schema_valid=True, artifact='spec.json'))
-        success = True
+        if hasattr(spec, 'model_dump'):
+            _write_json(output / 'spec.json', spec.model_dump(mode='json'))
+            trace.log('output', 'write_ir', dict(schema_valid=True, scientific_acceptance=success if scientific else None, artifact='spec.json'))
+        elif spec is not None:
+            _write_json(output / 'candidate.json', spec)
+        if not success:
+            print(f'Generation failed: {trace.sanitize(reason)}', file=sys.stderr)
     except Exception as exc:
+        success = False
         # Error text may include source/credentials; redact known secrets before stderr.
         if isinstance(exc, ValidationError):
             # Pydantic's printable exception includes raw input dictionaries.

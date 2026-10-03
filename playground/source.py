@@ -1,42 +1,21 @@
-"""Offline-first source adapters; compatibility types mirror spec sections 27–30."""
+"""Offline-first source adapters extending the authoritative shared source models."""
 from __future__ import annotations
 
 import json
 import re
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 from urllib.parse import unquote, urlparse
 
 import requests
 from bs4 import BeautifulSoup, Comment, NavigableString
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import Field, model_validator
 from playground.budget import BudgetExceeded, call_with_timeout
+from playground.models import Case, SourceBlock, FocusedEvidence, SourceDocument as SharedSourceDocument
 
 
-class Case(BaseModel):
-    source_url: str
-    focus: str
-    audience: str
-    model_config = ConfigDict(extra='allow', strict=True)
-
-
-class SourceBlock(BaseModel):
-    id: str
-    type: Literal['heading', 'paragraph', 'equation', 'algorithm', 'table', 'list', 'caption']
-    text: str
-    section: str | None = None
-    section_number: str | None = None
-    equation_number: str | None = None
-    page: int | None = None
-    order: int
-
-
-class SourceDocument(BaseModel):
-    source_url: str
-    title: str | None = None
-    raw_text: str | None = None
-    blocks: list[SourceBlock] = Field(default_factory=list)
-    origin: Literal['supplied', 'local', 'url']
+class SourceDocument(SharedSourceDocument):
+    """Person 1 source preservation metadata extends the shared source envelope."""
     raw_source: str | list[dict[str, Any]] | None = None
     structural_map: dict[str, Any] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -46,12 +25,6 @@ class SourceDocument(BaseModel):
         if self.raw_source is None:
             self.raw_source = self.raw_text if self.raw_text is not None else [b.model_dump() for b in self.blocks]
         return self
-
-
-class FocusedEvidence(BaseModel):
-    blocks: list[SourceBlock]
-    focus: str
-    audience: str
 
 
 class SourceUnavailable(ValueError):
