@@ -303,6 +303,24 @@ def _shape_merge(*types: TypeShape) -> tuple:
     return result
 
 
+def _check_map_projection(op: str, count: int, body_shape: tuple[int | None, ...]) -> None:
+    """Check output rank/capacity before evaluating further bodies or stacking."""
+    if op == 'elementwise':
+        if body_shape:
+            raise ComputationError('elementwise body must return a scalar')
+        projected = count
+    else:
+        if len(body_shape) + 1 > 2:
+            raise ComputationError('map projected output exceeds rank limit')
+        if any(dimension is None for dimension in body_shape):
+            return  # Check the first bounded body result before constructing output.
+        projected = count
+        for dimension in body_shape:
+            projected *= dimension
+    if projected > MAX_ELEMENTS:
+        raise ComputationError(f'{op} projected output exceeds element limit')
+
+
 def _infer_expression(expression: Any, types: dict[str, TypeShape], depth=0) -> TypeShape:
     if depth > MAX_DEPTH:
         raise ComputationError('Type inference depth exceeded')
@@ -500,8 +518,14 @@ class Evaluator:
                 return self.expression(inputs[1 if bool(condition) else 2], values, mask, depth + 1)
             active = np.ones(condition.shape, dtype=bool) if mask is None else np.broadcast_to(mask, condition.shape)
             # Only active elements have to satisfy a branch's numerical domain.
-            a = self.expression(inputs[1], values, active & condition, depth + 1) if np.any(active & condition) else 0
-            b = self.expression(inputs[2], values, active & ~condition, depth + 1) if np.any(active & ~condition) else 0
+            a = self.expression(inputs[1], values, active & condition, depth + 1) if np.any(active & condition) else None
+            b = self.expression(inputs[2], values, active & ~condition, depth + 1) if np.any(active & ~condition) else None
+            # Reuse the selected value for an entirely inactive branch. A numeric
+            # zero placeholder would promote boolean arrays to integers in where.
+            if a is None:
+                a = b if b is not None else 0
+            if b is None:
+                b = a
             _broadcast(condition, _array(a), _array(b))
             return _json(np.where(condition, a, b))
         args = [self.expression(x, values, mask, depth + 1) for x in inputs]
@@ -525,8 +549,25 @@ class Evaluator:
             if a.ndim == 0:
                 raise ComputationError(f'{op}: array required')
             items = a.reshape(-1) if op == 'elementwise' else a
-            out = [self.expression(params['body'], {**values, 'item': _json(item), 'index': i}, depth=depth + 1)
-                   for i, item in enumerate(items)]
+            # Reject statically known oversized results before executing any body.
+            scope = {name: _literal_type(value) for name, value in values.items()}
+            scope['item'] = TypeShape(_literal_type(args[0]).dtype, () if op == 'elementwise' else a.shape[1:])
+            scope['index'] = TypeShape('numeric', ())
+            inferred = _infer_expression(params['body'], scope)
+            _check_map_projection(op, len(items), inferred.shape)
+            if not len(items):
+                return _json(a.copy()) if op == 'elementwise' else []
+            out, body_shape = [], None
+            for i, item in enumerate(items):
+                candidate = self.expression(params['body'], {**values, 'item': _json(item), 'index': i}, depth=depth + 1)
+                candidate_shape = _array(candidate).shape
+                # Dynamic dimensions become concrete after one bounded body.
+                # Project before retaining it; later bodies must stay rectangular.
+                _check_map_projection(op, len(items), candidate_shape)
+                if body_shape is not None and candidate_shape != body_shape:
+                    raise ComputationError('map body result shape changed')
+                body_shape = candidate_shape
+                out.append(candidate)
             result = _array(out)
             if op == 'elementwise':
                 if result.size != a.size:

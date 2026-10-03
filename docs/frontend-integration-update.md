@@ -34,3 +34,8 @@ validator must establish actual rendered visual presence, required sections, and
 offline behavior; the science report alone cannot establish those properties.
 
 This handoff is stored in the repository for the frontend track to use at integration.
+
+The freeze fixes update this same interpreter: boolean `where` keeps boolean
+values when an array branch is inactive, and `map` rejects oversized projected
+outputs before assembling them. Include the updated `runtime/computation.js`.
+The full 37-test suite passed on Python 3.11.9 with Node parity checks and no skips.

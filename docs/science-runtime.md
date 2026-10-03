@@ -205,9 +205,17 @@ state must preserve its type and shape. Rank is at most 2, each value has at mos
 steps, and iteration/scan is at most 100 updates. IDs `state`, `item`, `index` are
 reserved for scoped body locals. Models allow at most 256 nodes and 32 controls.
 
+`map` checks projected output rank and element count before assembling results.
+Known body shapes are checked before any body executes. Dynamic shapes use one
+bounded body result to check the projection before retaining it or continuing;
+subsequent results must have the same shape. Outputs of exactly 10,000 elements
+are allowed. `elementwise` checks that its body returns a scalar.
+
 `where` masks elementwise log/sqrt/exp/divide/pow domains in unselected elements;
 it is not a general per-element short-circuit engine for reductions or matrix
 operations. Guard their scalar domains upstream or use bounded map bodies.
+Boolean branches preserve boolean result types even when an entire array branch
+is inactive, including nested masked conditions and downstream logical operators.
 
 Python and JavaScript use matching row-major Neumaier compensated sums for `sum`,
 `mean`, `dot`, `matmul`, normalization, softmax denominators, and cumulative sums.
@@ -246,7 +254,8 @@ Explorations must change visible computed values and satisfy optional structured
 expectations. Expectations about increases/decreases require all entries to
 strictly increase/decrease; use scalar nodes to describe aggregate changes.
 
-The implementation targets Python 3.11 syntax. Local execution was verified with
-the bundled Python runtime and Node; Python 3.11 itself is not installed on this
-machine. Full CLI, real-paper semantic generation, HTML compilation, browser
+The freeze regression run passed all 37 tests with no skips on actual CPython
+3.11.9, NumPy 2.3.5, Pydantic 2.13.5, and Node 24.21.0. This includes boolean
+`where` type parity and pre-materialization `map` allocation checks in both
+interpreters. Full CLI, real-paper semantic generation, HTML compilation, browser
 rendering, and offline artifact acceptance belong to the other integration tracks.

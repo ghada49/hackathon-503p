@@ -180,6 +180,17 @@
   function literalType(v) {const t=typeOf(v),leaf=flat(v)[0];return {dtype:typeof leaf==='boolean'?'boolean':typeof leaf==='string'?'categorical':'numeric',shape:t.shape};}
   function typeKind(t){return t.shape.length===2?'matrix':t.shape.length===1?'vector':t.dtype==='boolean'?'boolean':t.dtype==='categorical'?'categorical':'scalar';}
   function mergedShape(args){let result=[];args.filter(t=>t.shape.length).forEach(t=>{if(!result.length)result=t.shape;else{if(!compatible(result,t.shape))fail('Static shape mismatch');result=result.map((d,i)=>d===null?t.shape[i]:d);}});return result;}
+  function checkMapProjection(op, count, bodyShape) {
+    let projected = count;
+    if (op === 'elementwise') {
+      if (bodyShape.length) fail('elementwise body must return scalar');
+    } else {
+      if (bodyShape.length + 1 > 2) fail('map projected output exceeds rank limit');
+      if (bodyShape.includes(null)) return;
+      for (const dimension of bodyShape) projected *= dimension;
+    }
+    if (projected > LIMITS.elements) fail(op + ' projected output exceeds element limit');
+  }
   function inferExpression(e,types,depth=0){
     if(depth>LIMITS.depth)fail('Type inference depth');
     if(own(e,'ref'))return types[e.ref];if(own(e,'const'))return literalType(e.const);
@@ -257,8 +268,10 @@
         if (!Array.isArray(condition)) return expression(e.inputs[condition ? 1 : 2], values, mask, depth + 1);
         const active = mask === null ? unary(condition, () => true) : binary(condition, mask, (_, m) => m);
         const yes = binary(active, condition, (a, c) => a && c), no = binary(active, condition, (a, c) => a && !c);
-        const a = flat(yes).some(Boolean) ? expression(e.inputs[1], values, yes, depth + 1) : 0;
-        const b = flat(no).some(Boolean) ? expression(e.inputs[2], values, no, depth + 1) : 0;
+        let a = flat(yes).some(Boolean) ? expression(e.inputs[1], values, yes, depth + 1) : null;
+        let b = flat(no).some(Boolean) ? expression(e.inputs[2], values, no, depth + 1) : null;
+        if (a === null) a = b === null ? 0 : b;
+        if (b === null) b = a;
         broadcast(condition, a, b);
         return choose(condition, a, b);
       }
@@ -266,7 +279,21 @@
       if (['map', 'elementwise'].includes(op)) {
         if (!Array.isArray(args[0])) fail('map/elementwise requires array');
         const items = op === 'elementwise' ? flat(args[0]) : args[0];
-        const out = items.map((item, index) => expression(p.body, Object.assign(Object.create(null), values, {item, index}), null, depth + 1));
+        const scope = Object.create(null), inputType = literalType(args[0]);
+        Object.keys(values).forEach(name => { scope[name] = literalType(values[name]); });
+        scope.item = {dtype: inputType.dtype, shape: op === 'elementwise' ? [] : inputType.shape.slice(1)};
+        scope.index = {dtype: 'numeric', shape: []};
+        checkMapProjection(op, items.length, inferExpression(p.body, scope).shape);
+        if (!items.length) return op === 'elementwise' ? unary(args[0], x => x) : [];
+        const out = []; let bodyShape = null;
+        for (let index = 0; index < items.length; index++) {
+          const candidate = expression(p.body, Object.assign(Object.create(null), values, {item: items[index], index}), null, depth + 1);
+          const candidateShape = shape(candidate);
+          checkMapProjection(op, items.length, candidateShape);
+          if (bodyShape !== null && !same(bodyShape, candidateShape)) fail('map body result shape changed');
+          bodyShape = candidateShape;
+          out.push(candidate);
+        }
         if (op === 'elementwise') {
           if (out.some(Array.isArray)) fail('elementwise body must return scalar');
           return reshape(out, shape(args[0]));
