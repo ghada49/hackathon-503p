@@ -61,8 +61,8 @@ def select_source_context(document: SourceDocument, focus: str, audience: str, *
         raise ValueError('Prompt context budget must leave room for source data')
     blocks = _prepare(document)
     full = FocusContext(blocks=blocks, focus=focus, audience=audience, mode='full',
-        coverage=_coverage(full_source_included=True, focus_region_present=None,
-            neighboring_context_present=True, nearby_equations_algorithms_present=any(b.type in ('equation', 'algorithm') for b in blocks),
+        coverage=_coverage(full_source_included=document.metadata.get('extraction_faithful', True), focus_region_present=None,
+            neighboring_context_present=None, nearby_equations_algorithms_present=any(b.type in ('equation', 'algorithm') for b in blocks),
             referenced_material_resolved=None, definitions_found=any(_DEFINITION.search(b.text) for b in blocks),
             limitations_context_found=any(_LIMITATION.search(b.text) for b in blocks)), stages=['full_source'])
     if _size(full) <= (max_chars - prompt_overhead_chars) * comfort_ratio:
@@ -277,8 +277,8 @@ def build_focus_context(document: SourceDocument, focus: str, audience: str, *,
         raise ValueError('No complete source block fits the retrieval context budget; supply a smaller excerpt')
     all_detected = refs(selected)
     resolved = {reference for reference in all_detected if reference in reference_index and set(reference_index[reference]).issubset(selected)}
-    coverage = _coverage(full_source_included=len(selected) == len(blocks), focus_region_present=focus_present,
-        neighboring_context_present=all(any(j in selected for j in (i - 1, i + 1)) for i in core_picks),
+    coverage = _coverage(full_source_included=len(selected) == len(blocks) and document.metadata.get('extraction_faithful', True), focus_region_present=focus_present,
+        neighboring_context_present=focus_present and bool(core_picks) and all(any(j in selected for j in (i - 1, i + 1)) for i in core_picks),
         nearby_equations_algorithms_present=any(blocks[i].type in ('equation', 'algorithm') and
             any(region_for[i] == region_for[j] or abs(i - j) <= 2 for j in core_picks) for i in selected),
         referenced_material_resolved=all_detected.issubset(resolved), definitions_found=any(_DEFINITION.search(blocks[i].text) for i in selected),

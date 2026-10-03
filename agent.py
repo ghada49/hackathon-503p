@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 from playground.budget import BudgetManager
 from playground.generator import (GenerationFailure, OpenRouterClient, apply_restricted_patch,
-                                  generate_spec, generation_prompt_overhead, repair_spec, shared_ir_model, validate_ir)
+                                  generate_spec, generation_prompt_overhead, initial_missing_schema_version, repair_spec, shared_ir_model, validate_ir)
 from playground.retrieval import DEFAULT_CONTEXT_CHARS, select_source_context
 from playground.source import load_case, normalize_source, resolve_source
 from playground.trace import TraceLogger
@@ -77,7 +77,9 @@ def run(input_path: str | Path, output_path: str | Path, model: str, *,
                                 evidence=evidence, case=case, ir_model=shared, operations=operations,
                                 allow_full_regeneration=empty_candidate, max_prompt_chars=context_max_chars)
             candidate = apply_restricted_patch(failure.candidate or {}, patch, failure.allowed_paths,
-                                              protected_paths=('source_url', 'audience') if empty_candidate else ('schema_version', 'source_url', 'audience'))
+                                              protected_paths=('source_url', 'audience') if empty_candidate else ('schema_version', 'source_url', 'audience'),
+                                              allow_initial_missing_version=not empty_candidate and 'schema_version' in failure.allowed_paths and
+                                                  initial_missing_schema_version(failure.candidate, shared.model_json_schema()), ir_model=shared)
             spec = validate_ir(candidate, shared)
             trace.log('repair', 'accepted', dict(schema_valid=True))
         # This is the Person 1 handoff, not scientific/artifact validation.

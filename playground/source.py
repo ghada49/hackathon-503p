@@ -8,7 +8,7 @@ from typing import Any, Literal
 from urllib.parse import unquote, urlparse
 
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Comment, NavigableString
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from playground.budget import BudgetExceeded, call_with_timeout
 
@@ -74,7 +74,54 @@ def _blocks(items: list[Any]) -> list[SourceBlock]:
     return result
 
 
-def _html_blocks(text: str) -> list[SourceBlock]:
+def _math_text(tag) -> tuple[str, bool]:
+    """Small bounded presentation-MathML adapter, retaining unknown text conservatively."""
+    faithful = True
+    visited = 0
+
+    def render(node, depth=0):
+        nonlocal faithful, visited
+        visited += 1
+        if isinstance(node, Comment):
+            return ''
+        if isinstance(node, NavigableString):
+            return str(node).strip()
+        if depth > 32 or visited > 1000:
+            faithful = False
+            return node.get_text(' ', strip=True)
+        if node.name in ('math', 'semantics'):
+            for annotation in node.find_all('annotation', recursive=False):
+                if re.search(r'(?:tex|latex)', str(annotation.get('encoding', '')), re.I):
+                    value = annotation.get_text().strip()
+                    if value:
+                        return value
+        children = [child for child in node.children if not isinstance(child, Comment)
+                    and (not isinstance(child, NavigableString) or str(child).strip())]
+        name = node.name
+        if name in ('mi', 'mn', 'mo', 'mtext', 'ms'):
+            return node.get_text(' ', strip=True)
+        values = [render(child, depth + 1) for child in children]
+        base = values[0] if values else ''
+        if children and not isinstance(children[0], NavigableString) and children[0].name not in ('mi', 'mn', 'mo', 'mtext', 'ms'):
+            base = f'({base})'
+        if name == 'mfrac' and len(values) == 2:
+            return f'({values[0]})/({values[1]})'
+        if name in ('msup', 'msub') and len(values) == 2:
+            return f'{base}{"^" if name == "msup" else "_"}({values[1]})'
+        if name == 'msubsup' and len(values) == 3:
+            return f'{base}_({values[1]})^({values[2]})'
+        if name == 'msqrt' and values:
+            return f'sqrt({" ".join(values)})'
+        if name == 'mroot' and len(values) == 2:
+            return f'root({values[0]},{values[1]})'
+        if name not in ('math', 'mrow', 'semantics', 'mstyle'):
+            faithful = False
+        return ' '.join(value for value in values if value)
+
+    return render(tag), faithful
+
+
+def _html_blocks(text: str, *, metadata: dict | None = None) -> list[SourceBlock]:
     soup = BeautifulSoup(text, 'html.parser')
     # MathJax's TeX script tags carry scientific text, not executable instructions.
     for script in soup.find_all('script'):
@@ -84,6 +131,16 @@ def _html_blocks(text: str) -> list[SourceBlock]:
             script.replace_with(equation)
     for tag in soup(['script', 'style', 'nav']):
         tag.decompose()
+    faithful = True
+    for math in soup.find_all('math'):
+        if math.find_parent('math'):
+            continue
+        value, supported = _math_text(math)
+        faithful = faithful and supported
+        math.clear()
+        math.string = value
+    if metadata is not None:
+        metadata.update(extraction_faithful=faithful, representation='html_scientific_text')
     names = {'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'pre', 'table', 'ul', 'ol', 'figcaption'}
 
     def is_equation(tag):
@@ -93,14 +150,33 @@ def _html_blocks(text: str) -> list[SourceBlock]:
         return tag.name in names or is_equation(tag)
 
     items = []
-    for tag in soup.find_all(selected):
-        if any(selected(parent) for parent in tag.parents if parent.name != '[document]'):
-            continue
-        kind = ('equation' if is_equation(tag) else 'heading' if tag.name.startswith('h') else
-                {'pre': 'algorithm', 'table': 'table', 'ul': 'list', 'ol': 'list', 'figcaption': 'caption'}.get(tag.name, 'paragraph'))
-        items.append(dict(type=kind, text=tag.get_text(' ', strip=True)))
-    if not items:
-        items = [dict(type='paragraph', text=soup.get_text(' ', strip=True))]
+    pending = []
+
+    def flush():
+        value = ' '.join(pending).strip()
+        pending.clear()
+        if value:
+            items.append(dict(type='paragraph', text=value))
+
+    def walk(node):
+        if isinstance(node, Comment):
+            return
+        if isinstance(node, NavigableString):
+            value = str(node).strip()
+            if value:
+                pending.append(value)
+            return
+        if selected(node):
+            flush()
+            kind = ('equation' if is_equation(node) else 'heading' if node.name.startswith('h') else
+                    {'pre': 'algorithm', 'table': 'table', 'ul': 'list', 'ol': 'list', 'figcaption': 'caption'}.get(node.name, 'paragraph'))
+            items.append(dict(type=kind, text=node.get_text(' ', strip=True)))
+            return
+        for child in node.children:
+            walk(child)
+
+    walk(soup.body or soup)
+    flush()
     return _blocks(items)
 
 
@@ -141,7 +217,9 @@ def resolve_source(case: Case, *, base_dir: str | Path = '.', allow_url: bool = 
             if not text.strip():
                 raise SourceUnavailable('Local source is empty')
             if path.suffix.lower() in ('.html', '.htm'):
-                return SourceDocument(source_url=case.source_url, raw_text=text, blocks=_html_blocks(text), origin='local')
+                metadata = {}
+                blocks = _html_blocks(text, metadata=metadata)
+                return SourceDocument(source_url=case.source_url, raw_text=text, blocks=blocks, metadata=metadata, origin='local')
             return SourceDocument(source_url=case.source_url, raw_text=text, origin='local')
         except (OSError, UnicodeError) as exc:
             raise SourceUnavailable('Local source could not be read') from exc
@@ -176,7 +254,9 @@ def resolve_source(case: Case, *, base_dir: str | Path = '.', allow_url: bool = 
             if not text.strip():
                 raise SourceUnavailable('Fetched source is empty')
             if 'html' in headers.get('Content-Type', '').lower():
-                return SourceDocument(source_url=case.source_url, raw_text=text, blocks=_html_blocks(text), origin='url')
+                metadata = {}
+                blocks = _html_blocks(text, metadata=metadata)
+                return SourceDocument(source_url=case.source_url, raw_text=text, blocks=blocks, metadata=metadata, origin='url')
             return SourceDocument(source_url=case.source_url, raw_text=text, origin='url')
         except (requests.RequestException, UnicodeError, BudgetExceeded) as exc:
             raise SourceUnavailable('Source URL could not be fetched') from exc
@@ -184,42 +264,71 @@ def resolve_source(case: Case, *, base_dir: str | Path = '.', allow_url: bool = 
 
 
 def normalize_source(document: SourceDocument) -> list[SourceBlock]:
+    supplied_blocks = bool(document.blocks)
     if document.blocks:
         blocks = sorted(_blocks(document.blocks), key=lambda b: b.order)
     else:
-        parts = re.split(r'\n\s*\n', (document.raw_text or '').replace('\r\n', '\n'))
         items = []
-        for part in parts:
-            part = part.strip()
+        pending = []
+        fence = None
+
+        def flush(kind=None):
+            part = '\n'.join(pending).strip()
+            pending.clear()
             if not part:
-                continue
-            # Split Markdown headings from immediately following prose.
-            lines = part.splitlines()
-            if re.match(r'^#{1,6}\s+', lines[0]):
-                items.append(dict(type='heading', text=re.sub(r'^#{1,6}\s+', '', lines[0])))
-                part = '\n'.join(lines[1:]).strip()
-                if not part:
-                    continue
-            kind = ('algorithm' if part.startswith('```') else
-                    'equation' if part.startswith(('$$', '\\[')) else
-                    'list' if re.match(r'^(?:[-*+] |\d+\. )', part) else
-                    'table' if part.startswith('|') else
-                    'caption' if re.match(r'^(?:Figure|Table)\s+\d+', part) else 'paragraph')
+                return
+            kind = kind or ('equation' if part.startswith(('$$', '\\[')) else
+                            'list' if re.match(r'^(?:[-*+] |\d+\. )', part) else
+                            'table' if part.startswith('|') else
+                            'caption' if re.match(r'^(?:Figure|Table)\s+\d+', part) else 'paragraph')
             items.append(dict(type=kind, text=part))
+
+        for line in (document.raw_text or '').replace('\r\n', '\n').splitlines():
+            if fence:
+                pending.append(line)
+                if re.fullmatch(r'\s{0,3}' + re.escape(fence[0]) + '{' + str(len(fence)) + r',}\s*', line):
+                    flush('algorithm')
+                    fence = None
+                continue
+            opener = re.match(r'^\s{0,3}(`{3,}|~{3,})', line)
+            heading = re.match(r'^\s{0,3}#{1,6}\s+(.+)', line)
+            if opener:
+                flush()
+                fence = opener.group(1)
+                pending.append(line)
+            elif heading:
+                flush()
+                items.append(dict(type='heading', text=heading.group(1)))
+            elif not line.strip():
+                flush()
+            else:
+                pending.append(line)
+        flush('algorithm' if fence else None)
         blocks = _blocks(items)
     section = None
     section_number = None
     normalized = []
+    def section_label(value):
+        return re.sub(r'^(?:Section\s+)?\d+(?:\.\d+)*[.)]?\s+', '', value, flags=re.I).strip().casefold()
+
     for i, block in enumerate(blocks):
         if block.type == 'heading':
-            section = block.text
+            section = block.section or block.text
             match = re.match(r'^(?:Section\s+)?(\d+(?:\.\d+)*)[.)]?\s+\S', block.text, re.I)
             section_number = block.section_number or (match.group(1) if match else None)
+        label = block.section or section
+        if section and label and section_label(label) == section_label(section):
+            label = section
         normalized.append(block.model_copy(update={'id': f'b{i:04d}', 'text': block.text.strip(),
-            'section': block.section or section, 'section_number': block.section_number or section_number}))
+            'section': label, 'section_number': block.section_number or section_number}))
     if not normalized:
         raise SourceUnavailable('Source contains no nonempty blocks')
     document.blocks = normalized
+    if supplied_blocks and document.raw_text and document.metadata.get('representation') != 'html_scientific_text':
+        raw_prose = re.sub(r'(?m)^\s{0,3}#{1,6}\s+', '', document.raw_text)
+        represented = ' '.join(block.text for block in normalized)
+        faithful = ' '.join(raw_prose.split()) == ' '.join(represented.split())
+        document.metadata['extraction_faithful'] = faithful and document.metadata.get('extraction_faithful', True)
     document.structural_map = build_structural_map(normalized)
     return normalized
 
