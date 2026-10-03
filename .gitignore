@@ -7,3 +7,7 @@ __pycache__/
 .venv/
 out/
 .python311/
+.agents/skills/
+node_modules/
+test-results/
+debug.log

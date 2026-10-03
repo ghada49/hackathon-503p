@@ -1,0 +1,32 @@
+{
+  "story": "distribution_story",
+  "hero_visual": "contributions",
+  "presentation": {"density": "comfortable", "hero_emphasis": "metric", "comparison_mode": true},
+  "tree": {
+    "type": "stack",
+    "children": [
+      {"type": "split", "ratio": "50/50", "children": [
+        {"type": "control_group", "controls": ["probabilities", "num_outcomes"]},
+        {"type": "stack", "children": [
+          {"type": "visual", "visual": "entropy"},
+          {"type": "visual", "visual": "contributions"}
+        ]}
+      ]},
+      {"type": "comparison", "visual": "contributions", "title": "Compare information contributions"}
+    ]
+  },
+  "calculation_story": [
+    {"node": "active_weights", "presentation": "vector", "annotation": "Only the selected leading entries are active."},
+    {"node": "p", "presentation": "bar_chart", "annotation": "Active weights are normalized into a probability distribution."},
+    {"node": "contributions", "presentation": "bar_chart", "annotation": "Each outcome contributes to the total information."},
+    {"node": "entropy", "presentation": "metric", "annotation": "Entropy adds the individual contributions.", "meaning": "Total uncertainty of the active distribution"}
+  ],
+  "guided_mode": [
+    {"target": "probabilities", "instruction": "Try the certainty exploration, or edit the outcome weights yourself."},
+    {"target": "contributions", "instruction": "Compare the original and current contribution bars."},
+    {"target": "entropy", "instruction": "The large metric above shows the resulting entropy."}
+  ],
+  "annotations": [
+    {"target": "entropy", "text": "Entropy is below 0.2 bits in the current setup.", "when": {"value": "entropy", "op": "less_than", "threshold": 0.2}}
+  ]
+}

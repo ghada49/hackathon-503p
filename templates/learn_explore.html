@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>[[TITLE]]</title>
+  <style>[[STYLE]]</style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to explanation</a>
+    <main id="main" class="artifact">
+      <section id="overview" class="overview">
+        <h1 id="concept-title">[[TITLE]]</h1>
+        <p class="paper-reference" id="paper-label" hidden></p>
+        <p class="lead" id="idea"></p>
+      </section>
+      <section id="context" class="teaching-summary" aria-label="Concept at a glance">
+        <article class="summary-card"><span class="summary-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 18h6m-5 3h4M8 14a7 7 0 1 1 8 0c-1 .8-1 2-1 3H9c0-1 0-2.2-1-3Z"/></svg></span><div><h2>Idea</h2><p id="mental-model"></p></div></article>
+        <article class="summary-card"><span class="summary-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 19v-6m5 6V8m5 11V4m5 15V10"/></svg></span><div><h2>Why it matters</h2><p id="why"></p></div></article>
+        <article class="summary-card"><span class="summary-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v15m0-15C8 2 3 4 3 4v15s5-2 9 1c4-3 9-1 9-1V4s-5-2-9 1Z"/></svg></span><div><h2>Main symbols</h2><dl id="symbols"></dl></div></article>
+      </section>
+      <section id="playground">
+        <div class="section-heading"><span class="section-number" aria-hidden="true">1</span><div class="section-intro"><h2>Try it<span class="heading-detail"> — edit the inputs</span></h2><p>Make a change and see the results update.</p></div><div class="stage-actions"><button id="guide-start" class="quiet-button" hidden>Guide me →</button><button id="reset" class="quiet-button">↺ Reset values</button></div></div>
+        <div id="guided-walkthrough" class="panel guide-panel" hidden aria-label="Guided walkthrough">
+          <div><p class="eyebrow" id="guide-progress"></p><p id="guide-message" role="status" aria-live="polite"></p></div>
+          <div class="guide-actions"><button id="guide-back" class="quiet-button">Back</button><button id="guide-next" class="quiet-button">Next →</button><button id="guide-end" class="quiet-button">End guide</button></div>
+          <div id="guide-visual" hidden></div>
+        </div>
+        <div id="runtime-error" role="alert" class="error" hidden></div>
+        <div class="workbench" id="canonical-stage">
+          <div class="panel control-panel"><h3 class="eyebrow">Try it</h3><div id="controls"></div></div>
+          <div class="panel visual-panel"><h3 class="eyebrow">What happens</h3><div id="visual-tabs" class="tabs" role="tablist" aria-label="Visualization"></div><div id="main-visual" role="tabpanel" tabindex="0"></div><p class="visual-caption" id="visual-caption"></p></div>
+        </div>
+        <div id="experience-stage" hidden></div>
+        <div id="experience-summary" hidden></div>
+        <p id="presentation-status" class="hint" hidden>Reference values · editing is unavailable in this preview.</p>
+        <div id="experience-annotations" hidden></div>
+        <div class="formula-strip" id="formula-strip" hidden><span class="eyebrow">The relationship</span><p id="formula"></p></div>
+      </section>
+      <section id="intermediates"><div class="section-heading"><span class="section-number" aria-hidden="true">2</span><div class="section-intro"><h2>Follow the computation</h2><p>See how the inputs become the result, step by step.</p></div></div><div id="intermediate-values" class="intermediate-grid"></div><details class="dependencies"><summary>Show the dependency path</summary><div id="dependency-graph"></div></details></section>
+      <section id="changes" class="change-panel"><span class="change-icon" aria-hidden="true">↳</span><div class="change-content"><h3>What changed?</h3><p id="change-summary" role="status" aria-live="polite">Adjust a control to compare the result with its previous value.</p><div id="change-path"></div><details id="before-after" hidden><summary>Compare before and after</summary><div id="before-after-values" class="before-after-grid"></div></details></div></section>
+      <section id="explorations"><div class="section-heading"><span class="section-number" aria-hidden="true">3</span><div class="section-intro"><h2>Guided explorations</h2><p>Try a setup, observe what changes, and understand why.</p></div></div><div id="exploration-cards" class="exploration-grid"></div></section>
+      <section id="limitations" class="limitation"><div class="section-heading"><span class="section-number" aria-hidden="true">4</span><div class="section-intro"><h2 id="limitation-title">Limitations & assumptions</h2></div></div><p id="limitation-text"></p></section>
+      <section id="source"><div class="section-heading"><span class="section-number" aria-hidden="true">5</span><div class="section-intro"><h2>Source grounding</h2></div></div><div class="source-card" id="source-card"></div><div class="source-grid"><div><h3>Supported by the paper</h3><ul id="evidence"></ul></div><div><h3>For learning · simplifications</h3><ul id="simplifications"></ul></div></div><div id="source-excerpts"></div></section>
+    </main>
+  <noscript><p class="error">Enable JavaScript to use this interactive explanation.</p></noscript>
+  <script type="application/json" id="playground-data">[[PAYLOAD]]</script>
+  <script>[[VISUALS]]</script>
+  <script>[[EXPERIENCE]]</script>
+  <script>[[SCIENCE]]</script>
+  <script>[[EVALUATOR]]</script>
+  <script>[[RUNTIME]]</script>
+</body>
+</html>

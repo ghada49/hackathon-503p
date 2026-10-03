@@ -1,0 +1,5 @@
+# Preserve the exact upstream runtime and supplied science fixtures on Windows.
+runtime/computation.js -text
+tests/fixtures/attention_ir.json -text
+tests/fixtures/entropy_ir.json -text
+tests/fixtures/generic_ir.json -text

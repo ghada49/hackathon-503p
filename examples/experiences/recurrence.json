@@ -1,0 +1,34 @@
+{
+  "story": "cause_and_effect",
+  "layout": "controls_left",
+  "hero_visual": "history",
+  "calculation_order": [
+    "history",
+    "final"
+  ],
+  "emphasis_nodes": [
+    "final"
+  ],
+  "guided_mode": [
+    {
+      "target": "signal",
+      "instruction": "Edit the first input; follow the outlined downstream path.",
+      "highlight_dependency_path": true
+    },
+    {
+      "target": "history",
+      "instruction": "Observe the bound result. It comes from the shared computation runtime."
+    },
+    {
+      "target": "final",
+      "instruction": "Compare the final value with its previous value."
+    }
+  ],
+  "annotations": [
+    {
+      "target": "final",
+      "kind": "hint",
+      "text": "This is a synthetic teaching case, not a paper experiment."
+    }
+  ]
+}

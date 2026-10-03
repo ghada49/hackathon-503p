@@ -1,0 +1,34 @@
+{
+  "story": "input_to_output",
+  "layout": "controls_left",
+  "hero_visual": "distribution",
+  "calculation_order": [
+    "distribution_row",
+    "distribution"
+  ],
+  "emphasis_nodes": [
+    "distribution"
+  ],
+  "guided_mode": [
+    {
+      "target": "initial",
+      "instruction": "Edit the first input; follow the outlined downstream path.",
+      "highlight_dependency_path": true
+    },
+    {
+      "target": "distribution",
+      "instruction": "Observe the bound result. It comes from the shared computation runtime."
+    },
+    {
+      "target": "distribution",
+      "instruction": "Compare the final value with its previous value."
+    }
+  ],
+  "annotations": [
+    {
+      "target": "distribution",
+      "kind": "hint",
+      "text": "This is a synthetic teaching case, not a paper experiment."
+    }
+  ]
+}

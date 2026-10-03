@@ -16,7 +16,7 @@ from playground.source import load_case, normalize_source, resolve_source
 from playground.trace import TraceLogger
 
 _OUTPUTS = ('spec.json', 'source_blocks.json', 'source_document.json', 'trace.jsonl',
-            'validation.json', 'derived_playground.json', 'candidate.json', 'resolution.json')
+            'validation.json', 'derived_playground.json', 'candidate.json', 'resolution.json', 'index.html')
 
 
 def prepare_output_dir(path: str | Path) -> Path:
@@ -109,6 +109,13 @@ def run(input_path: str | Path, output_path: str | Path, model: str, *,
         if hasattr(spec, 'model_dump'):
             _write_json(output / 'spec.json', spec.model_dump(mode='json'))
             trace.log('output', 'write_ir', dict(schema_valid=True, scientific_acceptance=success if scientific else None, artifact='spec.json'))
+            if scientific and result.derived is not None:
+                from playground.renderer import render_to_file
+                render_to_file(result.derived, output / 'index.html', source={
+                    'title': document.title, 'url': case.source_url,
+                    'blocks': [block.model_dump(mode='json') for block in blocks],
+                })
+                trace.log('output', 'write_html', dict(artifact='index.html', scientific_acceptance=success))
         elif spec is not None:
             _write_json(output / 'candidate.json', spec)
         if not success:
