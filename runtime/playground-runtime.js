@@ -36,6 +36,23 @@
   sourceText.append(el('h3',source.title || source.url || 'Source evidence'),el('p',source.authors || 'Evidence block IDs are provided below.'));
   if(source.section)sourceText.append(el('p',source.section));
   byId('source-card').append(sourceText);
+  // Display-only cleanup of PDF extraction artifacts. It returns a new string
+  // for rendering; raw blocks, IDs and grounding are never touched or re-fed.
+  function cleanSourceText(raw) {
+    let t=String(raw).replace(/\r\n?/g,'\n');
+    // PDF name escapes: /#28 -> (, /#29 -> ), /#2F/ -> /. Printable ASCII only.
+    t=t.replace(/\/#([0-9A-Fa-f]{2})\/?/g,(m,hex)=>{ const c=parseInt(hex,16); return c >= 0x20 && c < 0x7f ? String.fromCharCode(c) : m; });
+    // Letter-spaced words ("T h e s e"): 4+ single letters joined only when the
+    // result is word-shaped, has a vowel and is not an a b c d style sequence.
+    t=t.replace(/(?<![A-Za-z0-9])[A-Za-z](?: [A-Za-z]){3,}(?![A-Za-z0-9])/g,run=>{
+      const word=run.replace(/ /g,''), lower=word.toLowerCase();
+      return /^[A-Z]?[a-z]+$/.test(word) && /[aeiou]/.test(lower) && !'abcdefghijklmnopqrstuvwxyz'.includes(lower) ? word : run;
+    });
+    // Whitespace: collapse runs, keep paragraph breaks, rejoin wrapped lines.
+    t=t.replace(/[ \t\f\v ]+/g,' ').replace(/ *\n */g,'\n').replace(/\n{3,}/g,'\n\n');
+    t=t.replace(/([a-z])-\n(?=[a-z])/g,'$1-').replace(/([^\n])\n(?=[^\n])/g,'$1 ');
+    return t.trim();
+  }
   const sourceBlocks=Array.isArray(source.blocks) ? source.blocks : [], SOURCE_PREVIEW_CHARS=600;
   const evidenceIds=new Set((ir.evidence || []).flatMap(e=>e.blocks || []));
   sourceBlocks.filter(block=>evidenceIds.has(block.id)).forEach(block=>{
@@ -45,18 +62,22 @@
       block.equation_number != null ? `Eq. ${block.equation_number}` : null,
       block.page != null ? `Page ${block.page}` : null].filter(Boolean).join(' · ');
     if(meta)card.append(el('p',meta,'evidence-ref'));
-    // Presentation only: show a short preview and keep the exact extracted
-    // text, artifacts included, behind a collapsed disclosure.
-    const full=String(block.text || ''), chars=Array.from(full);
+    // Presentation only: render a cleaned (and, if long, shortened) copy and
+    // keep the exact extracted text behind a collapsed disclosure.
+    const raw=String(block.text || ''), cleaned=cleanSourceText(raw), chars=Array.from(cleaned);
+    let shown=cleaned;
     if(chars.length > SOURCE_PREVIEW_CHARS) {
       let cut=chars.slice(0,SOURCE_PREVIEW_CHARS).join('');
       const space=cut.search(/\s\S*$/);
       if(space > SOURCE_PREVIEW_CHARS-120)cut=cut.slice(0,space);
-      card.append(el('p',`${cut.trimEnd()} …`,'source-preview'));
+      shown=`${cut.trimEnd()} …`;
+    }
+    card.append(el('p',shown,'source-preview'));
+    if(shown !== raw) {
       const details=el('details',null,'source-full');
-      details.append(el('summary','View full extracted source'),el('p',full));
+      details.append(el('summary','View raw extracted source'),el('p',raw,'source-raw'));
       card.append(details);
-    } else card.append(el('p',full));
+    }
     card.append(el('small',`${block.type || 'Excerpt'} · ${block.id}`));
     byId('source-excerpts').append(card);
   });
