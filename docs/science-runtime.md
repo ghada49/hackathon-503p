@@ -1,4 +1,4 @@
-# Person 2: scientific engine integration
+# Scientific engine integration
 
 Branch: `feature/science-runtime`. This subsystem follows Architecture/Specification
 v1.0 and preserves the three supplied IR fixtures byte-for-byte. It owns no HTML,
@@ -25,6 +25,21 @@ Adapt it if the logger has a different signature. Every event records a performe
 check. `ValidationFailure.allowed_paths` identifies affected IR subtrees; the
 orchestrator's restricted patcher must still protect unrelated fields and apply
 updates transactionally. This module never applies model patches.
+
+Operand validation uses a callable discriminator over `ref` / `const` / `op`;
+the serialized operand contract is unchanged. Schema failures use real IR paths,
+for example `computation.nodes.0.inputs.0.inputs`, rather than union branch labels.
+Allowed repair paths include the enclosing node/item and, for test/invariant/control
+failures, related computation nodes. They do not open unrelated teaching or test
+fields. The patcher must still enforce protected paths and revalidate.
+
+`derive_playground()` now preserves candidates with executable default calculations
+even when their validation report contains serious scientific/teaching failures.
+It throws for invalid core schema or computations that cannot run. Inspect
+`derived.validation.ok` before accepting success; available values are **not** a
+claim that the candidate passed validation. This lets the orchestrator snapshot
+a usable candidate while attempting repair. Bad visual references are recoverable
+and set `visual.requires_fallback=true` rather than discarding numerical results.
 
 Pass actual `SourceBlock`s to check evidence references. Omitting blocks leaves a
 warning and `source_references_verified=false`; it does **not** verify grounding.
@@ -53,7 +68,7 @@ from playground.validation import derive_playground
 values = evaluate(spec)                    # dict of controls + all computed nodes
 updated = evaluate(spec, {"prior": 0.5})   # partial control overrides
 dependencies = derive_dependencies(spec)   # source ID -> transitive node IDs
-derived = derive_playground(spec, blocks)  # validated defaults + visible nodes
+derived = derive_playground(spec, blocks)  # executable defaults + validation report
 ```
 
 Embed the **fixed** `runtime/computation.js` before your UI runtime. In the browser:
@@ -71,6 +86,62 @@ visuals produce recoverable warnings; the renderer must add a meaningful
 dependency diagram plus supporting values. A science `report.ok` does not imply
 the HTML, browser interactions, or fallback visuals have been validated.
 
+`rubric_summary.visual.meaningful_non_table_visual` is retained as the shared
+rubric key; `requested_non_table_visual` remains a compatibility alias. This is
+a check of a bound visual request, not browser-render evidence.
+
+## Optional declarative experience layer
+
+`PaperMechanismIR.experience` is optional; existing fixtures still validate.
+Generation may choose a story, layout, hero visual, calculation order, emphasis
+nodes, guided steps, and annotations in the **same** semantic call. No extra
+scientific interpretation call or required source-coverage field is introduced.
+
+```json
+{
+  "experience": {
+    "story": "equation_to_effect",
+    "layout": "pipeline",
+    "hero_visual": "attention_heatmap",
+    "calculation_order": ["scores", "scaled_scores", "weights", "attention_output"],
+    "emphasis_nodes": ["weights"],
+    "guided_mode": [{"target": "Q", "instruction": "Change a query."}],
+    "annotations": [{"target": "weights", "kind": "insight", "text": "Compare the weights."}]
+  }
+}
+```
+
+Allowed stories: `equation_to_effect`, `input_to_output`, `build_step_by_step`,
+`cause_and_effect`, `compare_cases`, `iterate_and_observe`, `distribution_story`,
+`spatial_story`. Allowed layouts: `visual_first`, `equation_first`, `controls_left`,
+`controls_right`, `comparison`, `pipeline`, `focus`, `dashboard`. Annotation kinds:
+`callout`, `hint`, `warning`, `insight`. These are choices for Person 3's trusted
+ExperienceCompiler; no CSS, coordinates, HTML, executable callbacks, or arbitrary
+DOM instructions are accepted as experience fields. Render all narrative strings
+as text, as with the rest of the IR.
+
+Visuals now accept an optional `id`. A hero must reference the visual's ID, not its
+computation binding. With no explicit ID, `derive_visual_ids(spec)` generates
+`visual_0`, `visual_1`, etc. Explicit IDs take precedence; collisions get deterministic
+suffixes. `derived.visual_ids` is the parallel ID list for Person 3 to use on the
+actual rendered components. Duplicate explicit IDs trigger canonical experience
+fallback because their intended targets are ambiguous.
+
+Calculation order/emphasis refer to computation nodes. Guided-step and annotation
+targets refer to controls, nodes, visual IDs, or canonical component IDs:
+`teaching`, `idea`, `why`, `mental_model`, `symbols`, `controls`, `main_visual`,
+`equation`, `intermediates`, `what_changed`, `explorations`, `limitation`,
+`source_grounding`. These IDs are a shared semantic namespace, not CSS selectors.
+
+The science validator checks only structural references, not aesthetics. Invalid
+experience enums, structure, or targets produce recoverable diagnostics and
+`derived.resolved_experience=None`. Malformed optional input is discarded by the
+model parser with diagnostics held privately until traced; it is never silently
+interpreted as executable content. The compiler must use **resolved_experience**,
+rather than blindly following `spec.experience`, and select the canonical Learn &
+Explore layout when it is None. Failed visual bindings also require the renderer
+to supply its dependency-diagram fallback, independently of experience layout.
+
 Dependency keys include both controls and nodes. Values contain sorted transitive
 downstream node IDs. They include references in nested bodies and dynamic slice
 endpoints. Controls themselves are excluded from changed computed values, so a
@@ -85,9 +156,12 @@ decorative echo of an unused input does not pass influence validation.
   numbers when the selected value is numeric. No numeric string coercion.
 - `slice.params.end_ref` names a scalar stop index (exclusive). It cannot coexist
   with literal `stop`, and participates in dependencies.
+- Slice bounds accept integer-valued floats such as `2.0`, which are converted to
+  Python integers before slicing. Fractional bounds remain errors in both engines.
 - `concat.params.promote_scalars=true` promotes scalar operands to length-one
   vectors before concatenation. Otherwise concat requires arrays.
 - Unknown IR fields are rejected (except `Case`, which preserves extra fields).
+  Invalid optional experience data is the presentation-only recoverable exception.
 
 ## Operator semantics
 
@@ -134,6 +208,12 @@ reserved for scoped body locals. Models allow at most 256 nodes and 32 controls.
 `where` masks elementwise log/sqrt/exp/divide/pow domains in unselected elements;
 it is not a general per-element short-circuit engine for reductions or matrix
 operations. Guard their scalar domains upstream or use bounded map bodies.
+
+Python and JavaScript use matching row-major Neumaier compensated sums for `sum`,
+`mean`, `dot`, `matmul`, normalization, softmax denominators, and cumulative sums.
+For example, `sum([0.1]*10)` is `1.0` in both, and cancellation in `[1e16,1,-1e16]`
+preserves `1.0`. Transcendental functions can still differ by floating-point rounding,
+so conformance checks use a numerical tolerance instead of exact equality everywhere.
 
 `validate_types_shapes()` propagates abstract types before execution and checks
 both branches. `None` in a derived shape denotes a dynamic dimension (for example

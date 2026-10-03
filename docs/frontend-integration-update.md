@@ -1,0 +1,36 @@
+# Frontend integration update
+
+For the frontend track, `runtime/computation.js` is the shared **fixed scientific
+interpreter**. Embed it before `runtime/playground-runtime.js`; do not duplicate
+its math or introduce generated JS. It exposes:
+
+```javascript
+const values = PaperComputation.evaluate(ir, controlState);
+const affected = PaperComputation.deriveDependencies(ir);
+```
+
+The scientific models now support the optional `experience` layer approved for
+the adaptive ExperienceCompiler. Old IR without this block still works. Use:
+
+```python
+derived = derive_playground(ir, source_blocks)
+experience = derived.resolved_experience   # None -> canonical Learn & Explore
+visual_ids = derived.visual_ids           # parallel with ir.visuals
+values = derived.evaluated_defaults
+report = derived.validation               # available values do not imply a pass
+```
+
+Visuals may provide explicit `id` strings for hero selection and guided targets;
+otherwise science derives `visual_0`, `visual_1`, etc. Use these resolved IDs in
+the rendered UI. Layout/story enums, annotation kinds, component IDs, and fallback
+rules are documented in `docs/science-runtime.md` and the exported JSON schema.
+
+Invalid experience targets or structure use canonical layout. Invalid visual
+bindings require a dependency/computation diagram plus supporting values. They
+are recoverable presentation failures and never erase executable defaults.
+
+The rubric key `meaningful_non_table_visual` remains available. The frontend/artifact
+validator must establish actual rendered visual presence, required sections, and
+offline behavior; the science report alone cannot establish those properties.
+
+This handoff is stored in the repository for the frontend track to use at integration.

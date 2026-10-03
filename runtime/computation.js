@@ -85,7 +85,17 @@
     if (axis === 1) return v.map(fn);
     return columns(columns(v).map(fn));
   }
-  const sum = a => a.reduce((s, x) => s + x, 0);
+  function compensated(a, history = false) {
+    let total = 0, correction = 0; const out = [];
+    a.forEach(value => {
+      const updated = total + value;
+      correction += Math.abs(total) >= Math.abs(value) ? (total - updated) + value : (value - updated) + total;
+      total = updated;
+      if (history) out.push(total + correction);
+    });
+    return history ? out : total + correction;
+  }
+  const sum = a => compensated(a);
   const argmax = a => a.indexOf(Math.max(...a));
   function typeOf(v) {
     const s = shape(v);
@@ -334,8 +344,8 @@
     if(op==='slice') {
       const v=a[0];if(!Array.isArray(v))fail('slice requires array');const step=own(p,'step')?integer(p.step,'step'):1;if(step===0)fail('Zero slice step');
       const n=v.length, positive=step>0;
-      function bound(x, fallback){if(x==null)return fallback;integer(x,'slice bound');if(x<0)x+=n;return Math.max(positive?0:-1,Math.min(positive?n:n-1,x));}
-      const start=bound(p.start,positive?0:n-1),stop=bound(p.stop,positive?n:-1),out=[];
+      function bound(key, fallback){if(!own(p,key))return fallback;let x=integer(p[key],'slice bound');if(x<0)x+=n;return Math.max(positive?0:-1,Math.min(positive?n:n-1,x));}
+      const start=bound('start',positive?0:n-1),stop=bound('stop',positive?n:-1),out=[];
       for(let i=start;positive?i<stop:i>stop;i+=step)out.push(v[i]);return out;
     }
     if(op==='flatten')return flat(a[0]);
@@ -350,7 +360,7 @@
     numeric(a[0]);if(flat(a[0]).length===0)fail('Empty input');let axis=axisOf(p,a[0]);
     const reductions={sum,product:x=>x.reduce((s,y)=>s*y,1),mean:x=>sum(x)/x.length,min:x=>Math.min(...x),max:x=>Math.max(...x),argmin:x=>x.indexOf(Math.min(...x)),argmax};
     if(own(reductions,op))return reduction(a[0],axis,reductions[op]);
-    if(op==='cumsum')return along(a[0],axis,v=>{let s=0;return v.map(x=>s+=x);});
+    if(op==='cumsum')return along(a[0],axis,v=>compensated(v,true));
     if(op==='difference')return along(a[0],axis,v=>v.slice(1).map((x,i)=>x-v[i]));
     if(op==='softmax_rows'){if(shape(a[0]).length!==2)fail('softmax_rows requires matrix');axis=1;}
     if(['softmax','softmax_rows','normalize'].includes(op)) {

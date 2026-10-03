@@ -97,6 +97,46 @@ def _integer(value: Any, label: str) -> int:
     return int(a)
 
 
+def _sum_sequence(values) -> float:
+    """Neumaier sum in a fixed traversal order, shared with the JS runtime."""
+    total, correction = 0.0, 0.0
+    for value in values:
+        value = float(value)
+        updated = total + value
+        correction += (total - updated) + value if abs(total) >= abs(value) else (value - updated) + total
+        total = updated
+    return total + correction
+
+
+def _sum_array(value: np.ndarray, axis: int | None = None, keepdims: bool = False):
+    result = _sum_sequence(value.reshape(-1)) if axis is None else np.apply_along_axis(_sum_sequence, axis, value)
+    if keepdims:
+        return np.asarray(result).reshape((1,) * value.ndim) if axis is None else np.expand_dims(result, axis)
+    return result
+
+
+def _cumsum_sequence(values) -> np.ndarray:
+    total, correction, result = 0.0, 0.0, []
+    for value in values:
+        value = float(value)
+        updated = total + value
+        correction += (total - updated) + value if abs(total) >= abs(value) else (value - updated) + total
+        total = updated
+        result.append(total + correction)
+    return np.asarray(result)
+
+
+def _slice_params(params: dict) -> dict:
+    """Normalize integer-valued floats; reject fractional or nonnumeric bounds."""
+    normalized = dict(params)
+    for key in ('start', 'stop', 'step'):
+        if key in normalized:
+            normalized[key] = _integer(normalized[key], key)
+    if normalized.get('step') == 0:
+        raise ComputationError('slice step cannot be zero')
+    return normalized
+
+
 def value_type(value: Any) -> dict[str, Any]:
     a = _array(value)
     kind = 'matrix' if a.ndim == 2 else 'vector' if a.ndim == 1 else 'boolean' if a.dtype.kind == 'b' else 'categorical' if a.dtype.kind in 'US' else 'scalar'
@@ -380,7 +420,8 @@ def _infer_expression(expression: Any, types: dict[str, TypeShape], depth=0) -> 
         n = args[0].shape[0]
         length = None
         if n is not None and 'end_ref' not in p:
-            start, stop, step = slice(p.get('start'), p.get('stop'), p.get('step')).indices(n)
+            normalized = _slice_params(p)
+            start, stop, step = slice(normalized.get('start'), normalized.get('stop'), normalized.get('step')).indices(n)
             length = len(range(start, stop, step))
         return TypeShape(args[0].dtype, (length, *args[0].shape[1:]))
     if op == 'concat':
@@ -565,12 +606,12 @@ class Evaluator:
             if op == 'dot':
                 if a.ndim != 1 or b.ndim != 1 or a.shape != b.shape:
                     raise ComputationError('dot requires equal-length vectors')
-                return np.dot(a, b)
+                return _sum_sequence(a * b)
             if a.ndim != 2 or b.ndim != 2 or a.shape[1] != b.shape[0]:
                 raise ComputationError('matmul requires compatible matrices')
             if a.shape[0] * b.shape[1] > MAX_ELEMENTS:
                 raise ComputationError('Matrix output exceeds size limit')
-            return a @ b
+            return np.asarray([[_sum_sequence(row * column) for column in b.T] for row in a])
         if op == 'range':
             vals = [_integer(x, 'range argument') for x in args]
             start, stop, step = (0, vals[0], 1) if len(vals) == 1 else (vals[0], vals[1], vals[2] if len(vals) == 3 else 1)
@@ -595,11 +636,7 @@ class Evaluator:
         if op == 'slice':
             if a.ndim == 0:
                 raise ComputationError('slice requires an array')
-            for key in ('start', 'stop', 'step'):
-                if key in p:
-                    _integer(p[key], key)
-            if p.get('step') == 0:
-                raise ComputationError('slice step cannot be zero')
+            p = _slice_params(p)
             return a[slice(p.get('start'), p.get('stop'), p.get('step'))]
         if op == 'flatten':
             return a.reshape(-1)
@@ -612,12 +649,16 @@ class Evaluator:
         if a.size == 0:
             raise ComputationError(f'{op}: empty input')
         axis = self._axis(p, a, default=None)
-        reductions = {'sum': np.sum, 'product': np.prod, 'mean': np.mean, 'min': np.min, 'max': np.max,
+        if op == 'sum':
+            return _sum_array(a, axis)
+        if op == 'mean':
+            return _sum_array(a, axis) / (a.size if axis is None else a.shape[axis])
+        reductions = {'product': np.prod, 'min': np.min, 'max': np.max,
                       'argmin': np.argmin, 'argmax': np.argmax}
         if op in reductions:
             return reductions[op](a, axis=axis)
         if op == 'cumsum':
-            return np.cumsum(a, axis=axis)
+            return _cumsum_sequence(a.reshape(-1)) if axis is None else np.apply_along_axis(_cumsum_sequence, axis, a)
         if op == 'difference':
             return np.diff(a.reshape(-1) if axis is None else a, axis=0 if axis is None else axis)
         if op == 'softmax_rows':
@@ -626,9 +667,9 @@ class Evaluator:
             axis = 1
         if op in {'softmax', 'softmax_rows'}:
             exps = np.exp(a - np.max(a, axis=axis, keepdims=True))
-            return exps / np.sum(exps, axis=axis, keepdims=True)
+            return exps / _sum_array(exps, axis=axis, keepdims=True)
         if op == 'normalize':
-            total = np.sum(a, axis=axis, keepdims=True)
+            total = _sum_array(a, axis=axis, keepdims=True)
             if np.any(total == 0):
                 raise ComputationError('Cannot normalize zero-total input')
             return a / total

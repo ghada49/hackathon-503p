@@ -1,5 +1,37 @@
 {
   "$defs": {
+    "AnnotationSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "target": {
+          "minLength": 1,
+          "title": "Target",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "callout",
+            "hint",
+            "warning",
+            "insight"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "target",
+        "kind",
+        "text"
+      ],
+      "title": "AnnotationSpec",
+      "type": "object"
+    },
     "AssertionSpec": {
       "additionalProperties": false,
       "properties": {
@@ -95,7 +127,7 @@
         },
         "inputs": {
           "items": {
-            "anyOf": [
+            "oneOf": [
               {
                 "$ref": "#/$defs/Reference"
               },
@@ -437,6 +469,101 @@
       "title": "ExpectationSpec",
       "type": "object"
     },
+    "ExperienceSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "story": {
+          "anyOf": [
+            {
+              "enum": [
+                "equation_to_effect",
+                "input_to_output",
+                "build_step_by_step",
+                "cause_and_effect",
+                "compare_cases",
+                "iterate_and_observe",
+                "distribution_story",
+                "spatial_story"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Story"
+        },
+        "layout": {
+          "anyOf": [
+            {
+              "enum": [
+                "visual_first",
+                "equation_first",
+                "controls_left",
+                "controls_right",
+                "comparison",
+                "pipeline",
+                "focus",
+                "dashboard"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Layout"
+        },
+        "hero_visual": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hero Visual"
+        },
+        "calculation_order": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 256,
+          "title": "Calculation Order",
+          "type": "array"
+        },
+        "emphasis_nodes": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 256,
+          "title": "Emphasis Nodes",
+          "type": "array"
+        },
+        "guided_mode": {
+          "items": {
+            "$ref": "#/$defs/GuidedStep"
+          },
+          "maxItems": 100,
+          "title": "Guided Mode",
+          "type": "array"
+        },
+        "annotations": {
+          "items": {
+            "$ref": "#/$defs/AnnotationSpec"
+          },
+          "maxItems": 100,
+          "title": "Annotations",
+          "type": "array"
+        }
+      },
+      "title": "ExperienceSpec",
+      "type": "object"
+    },
     "ExplorationChange": {
       "additionalProperties": false,
       "properties": {
@@ -510,7 +637,7 @@
         },
         "inputs": {
           "items": {
-            "anyOf": [
+            "oneOf": [
               {
                 "$ref": "#/$defs/Reference"
               },
@@ -537,6 +664,27 @@
         "inputs"
       ],
       "title": "Expression",
+      "type": "object"
+    },
+    "GuidedStep": {
+      "additionalProperties": false,
+      "properties": {
+        "target": {
+          "minLength": 1,
+          "title": "Target",
+          "type": "string"
+        },
+        "instruction": {
+          "minLength": 1,
+          "title": "Instruction",
+          "type": "string"
+        }
+      },
+      "required": [
+        "target",
+        "instruction"
+      ],
+      "title": "GuidedStep",
       "type": "object"
     },
     "InvariantSpec": {
@@ -775,6 +923,19 @@
           "title": "Type",
           "type": "string"
         },
+        "id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
         "title": {
           "anyOf": [
             {
@@ -896,6 +1057,17 @@
       "maxItems": 100,
       "title": "Invariants",
       "type": "array"
+    },
+    "experience": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ExperienceSpec"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     }
   },
   "required": [

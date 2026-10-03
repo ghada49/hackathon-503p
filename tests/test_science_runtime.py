@@ -14,7 +14,7 @@ from pydantic import ValidationError
 from playground.computation import (OPERATIONS, ComputationError, derive_dependencies,
                                     evaluate, evaluate_expression, infer_types_shapes, validate_types_shapes)
 from playground.models import PaperMechanismIR, SourceBlock, Case
-from playground.validation import derive_playground, validate_spec
+from playground.validation import derive_playground, derive_visual_ids, resolve_experience, validate_spec
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -326,14 +326,20 @@ class ValidationTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertIn('invariant', {f.check for f in result.failures})
 
-    def test_visual_fallback_is_recoverable_and_binding_error_is_not(self):
+    def test_visual_and_binding_fallback_are_recoverable(self):
         s = fixture()
         s['visuals'] = [{'type': 'unsupported', 'value': 'posterior'}]
         result = validate_spec(s, source_for(s))
         self.assertTrue(result.ok, result.model_dump())
         self.assertTrue(result.rubric_summary['visual']['requires_fallback'])
         s['visuals'][0]['value'] = 'missing'
-        self.assertFalse(validate_spec(s, source_for(s)).ok)
+        report = validate_spec(s, source_for(s))
+        self.assertTrue(report.ok)
+        self.assertFalse(report.rubric_summary['visual']['bindings_valid'])
+        self.assertTrue(any(w.check == 'visual_bindings' for w in report.warnings))
+        derived = derive_playground(s, source_for(s))
+        self.assertAlmostEqual(derived.evaluated_defaults['posterior'], .5625)
+        self.assertNotIn('missing', derived.visible_nodes)
 
     def test_trace_callback_and_case_extra_fields(self):
         events = []
@@ -341,6 +347,168 @@ class ValidationTests(unittest.TestCase):
         validate_spec(s, source_for(s), lambda stage, action, result: events.append((stage, action, result)))
         self.assertTrue(any(action == 'control_influence' for _, action, _ in events))
         self.assertEqual(Case(source_url='url', focus='focus', audience='audience', excerpt='text').model_extra['excerpt'], 'text')
+
+
+class IntegrationRegressionTests(unittest.TestCase):
+    assertValue = ComputationTests.assertValue
+
+    def test_integer_float_slice_parameters_and_slider(self):
+        cases = [expr('slice', [0, 1, 2, 3], params={'start': 1.0, 'stop': 4.0, 'step': 2.0}),
+                 expr('slice', [0, 1, 2, 3], params={'step': -1.0})]
+        expected = [[1, 3], [3, 2, 1, 0]]
+        for e, answer in zip(cases, expected):
+            self.assertValue(evaluate_expression(e), answer)
+        s = fixture('entropy')
+        c = s['controls'][1]
+        c.update(type='slider', value_kind='scalar', default=4.0, min=2.0, max=4.0, step=1.0, options=None)
+        self.assertTrue(validate_spec(s, source_for(s)).ok)
+        self.assertEqual(evaluate(s, {'num_outcomes': 2.0})['entropy'], 1)
+        # Literal slice bounds also pass static inference, not just runtime checks.
+        t = fixture()
+        t['computation'] = {'nodes': [{'id': 'answer', **cases[0]}], 'outputs': ['answer']}
+        self.assertEqual(validate_types_shapes(PaperMechanismIR.model_validate(t))['answer'].shape, (2,))
+        if shutil.which('node'):
+            tasks = [{'expression': e} for e in cases] + [{'spec': s, 'inputs': {'num_outcomes': 2.0}}]
+            result = js(tasks)
+            self.assertTrue(all(r['ok'] for r in result), result)
+            for r, answer in zip(result, expected): self.assertValue(r['value'], answer)
+            self.assertEqual(result[-1]['value']['entropy'], 1)
+        for key in ('start', 'stop', 'step'):
+            e = expr('slice', [1, 2], params={key: 1.5})
+            with self.assertRaises(ComputationError): evaluate_expression(e)
+            if shutil.which('node'): self.assertFalse(js([{'expression': e}])[0]['ok'])
+
+    def test_single_operand_error_has_real_patchable_path(self):
+        for bad, suffix in [({'op': 'add'}, 'inputs'), ({'ref': None}, 'ref'), ({'op': 12, 'inputs': []}, 'op')]:
+            s = fixture()
+            s['computation']['nodes'][0]['inputs'][0] = bad
+            report = validate_spec(s)
+            self.assertEqual(len(report.failures), 1, report.model_dump())
+            failure = report.failures[0]
+            self.assertEqual(failure.path, f'computation.nodes.0.inputs.0.{suffix}')
+            self.assertEqual(failure.allowed_paths, ['computation.nodes.0'])
+            self.assertNotIn('Expression', failure.path)
+
+    def test_operand_forms_are_exclusive(self):
+        for operand in ({'ref': 'prior', 'const': 1}, 'prior + 1', {}):
+            s = fixture()
+            s['computation']['nodes'][0]['inputs'][0] = operand
+            report = validate_spec(s)
+            self.assertEqual(len(report.failures), 1)
+            self.assertEqual(report.failures[0].path, 'computation.nodes.0.inputs.0')
+
+    def test_derivation_preserves_failed_candidate_and_report(self):
+        s = fixture()
+        s['tests'][0]['assertions'][0]['expected'] = .99
+        derived = derive_playground(s, source_for(s))
+        self.assertFalse(derived.validation.ok)
+        self.assertAlmostEqual(derived.evaluated_defaults['posterior'], .5625)
+        self.assertTrue(any(f.check == 'test_case' for f in derived.validation.failures))
+        s['computation']['nodes'][0]['inputs'][1] = const(0)
+        with self.assertRaises(ComputationError): derive_playground(s, source_for(s))
+
+    def test_rubric_key_and_scoped_related_repairs(self):
+        s = fixture()
+        s['tests'][0]['assertions'][0]['expected'] = .99
+        report = validate_spec(s, source_for(s))
+        failure = next(f for f in report.failures if f.check == 'test_case')
+        self.assertIn('tests.0', failure.allowed_paths)
+        self.assertIn('computation.nodes.2', failure.allowed_paths)
+        self.assertNotIn('teaching', failure.allowed_paths)
+        self.assertNotIn('tests.1', failure.allowed_paths)
+        self.assertIn('meaningful_non_table_visual', report.rubric_summary['visual'])
+        self.assertTrue(report.rubric_summary['visual']['meaningful_non_table_visual'])
+        s['schema_version'] = '2.0'
+        protected = next(f for f in validate_spec(s).failures if f.path == 'schema_version')
+        self.assertFalse(protected.repairable)
+        self.assertEqual(protected.allowed_paths, [])
+
+    def test_compensated_sum_parity(self):
+        cases = [expr('sum', [.1] * 10), expr('sum', [1e16, 1, -1e16]),
+                 expr('sum', [[.1]*10, [.1]*10], params={'axis': 1}),
+                 expr('cumsum', [.1]*10), expr('mean', [.1]*10),
+                 expr('dot', [.1]*10, [1]*10),
+                 expr('matmul', [[.1]*10], [[1]]*10)]
+        self.assertEqual(evaluate_expression(cases[0]), 1.0)
+        self.assertEqual(evaluate_expression(cases[1]), 1.0)
+        self.assertEqual(evaluate_expression(cases[3])[-1], 1.0)
+        if shutil.which('node'):
+            for e, result in zip(cases, js([{'expression': e} for e in cases])):
+                self.assertTrue(result['ok'], result)
+                self.assertEqual(result['value'], evaluate_expression(e))
+
+
+class ExperienceTests(unittest.TestCase):
+    def test_exported_schema_matches_models(self):
+        schema = json.loads((ROOT / 'contracts' / 'paper-mechanism-ir.schema.json').read_text(encoding='utf-8'))
+        self.assertEqual(schema, PaperMechanismIR.model_json_schema())
+        self.assertIn('ExperienceSpec', schema['$defs'])
+        self.assertNotIn('experience', schema['required'])
+
+    def experience_fixture(self):
+        s = fixture('attention')
+        s['visuals'][1]['id'] = 'attention_heatmap'
+        s['experience'] = {
+            'story': 'equation_to_effect', 'layout': 'pipeline', 'hero_visual': 'attention_heatmap',
+            'calculation_order': ['scores', 'scaled_scores', 'weights', 'attention_output'],
+            'emphasis_nodes': ['weights'],
+            'guided_mode': [{'target': 'Q', 'instruction': 'Change a query.'},
+                            {'target': 'weights', 'instruction': 'Watch the weights.'}],
+            'annotations': [{'target': 'attention_heatmap', 'kind': 'insight', 'text': 'Weights sum to one.'}]
+        }
+        return s
+
+    def test_optional_backwards_compatible_and_valid_experience(self):
+        self.assertIsNone(PaperMechanismIR.model_validate(fixture()).experience)
+        s = self.experience_fixture()
+        derived = derive_playground(s, source_for(s))
+        self.assertTrue(derived.validation.ok)
+        self.assertEqual(derived.resolved_experience.layout, 'pipeline')
+        self.assertIn('attention_heatmap', derived.visual_ids)
+
+    def test_missing_targets_are_recoverable(self):
+        for field, value in [('hero_visual', 'missing'), ('calculation_order', ['missing']),
+                             ('emphasis_nodes', ['missing']),
+                             ('guided_mode', [{'target': 'missing', 'instruction': 'Try this.'}]),
+                             ('annotations', [{'target': 'missing', 'kind': 'hint', 'text': 'Try this.'}])]:
+            s = self.experience_fixture()
+            s['experience'][field] = value
+            with self.subTest(field=field):
+                derived = derive_playground(s, source_for(s))
+                self.assertTrue(derived.validation.ok)
+                self.assertIsNone(derived.resolved_experience)
+                self.assertTrue(any(w.check == 'experience_fallback' for w in derived.validation.warnings))
+                self.assertTrue(derived.evaluated_defaults)
+
+    def test_malformed_presentation_cannot_invalidate_science(self):
+        for bad in ({'layout': 'freeform'}, {'css': 'body{display:none}'},
+                    {'guided_mode': [{'target': 'Q'}]}, 'run a callback'):
+            s = self.experience_fixture()
+            s['experience'] = bad
+            model = PaperMechanismIR.model_validate(s)
+            self.assertIsNone(model.experience)
+            self.assertTrue(model._experience_issues)
+            # Diagnostics survive validation of an already-parsed model.
+            report = validate_spec(model, source_for(s))
+            self.assertTrue(report.ok)
+            self.assertTrue(any(w.check == 'experience_fallback' for w in report.warnings))
+            self.assertIsNone(derive_playground(model, source_for(s)).resolved_experience)
+
+    def test_stable_visual_ids_and_canonical_components(self):
+        s = self.experience_fixture()
+        s['visuals'][1]['id'] = 'visual_0'  # Explicit IDs win over derived defaults.
+        s['experience']['hero_visual'] = 'visual_0'
+        s['experience']['annotations'][0]['target'] = 'source_grounding'
+        spec = PaperMechanismIR.model_validate(s)
+        ids = derive_visual_ids(spec)
+        self.assertEqual(ids[0], 'visual_0_1')
+        self.assertEqual(ids[1], 'visual_0')
+        self.assertEqual(ids, derive_visual_ids(spec))
+        self.assertIsNotNone(resolve_experience(spec)[0])
+        s['visuals'][2]['id'] = 'visual_0'
+        derived = derive_playground(s, source_for(s))
+        self.assertEqual(len(derived.visual_ids), len(set(derived.visual_ids)))
+        self.assertIsNone(derived.resolved_experience)
 
 
 if __name__ == '__main__':

@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 import math
-from typing import Any, Literal, Union
+from typing import Annotated, Any, Literal, Union
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (AliasChoices, BaseModel, ConfigDict, Discriminator, Field,
+                      PrivateAttr, Tag, ValidationError, field_validator, model_validator)
 
 ValueKind = Literal['scalar', 'vector', 'matrix', 'sequence', 'boolean', 'categorical']
 ControlType = Literal['slider', 'number', 'checkbox', 'select', 'vector_editor', 'matrix_editor', 'sequence_editor']
@@ -130,9 +131,26 @@ class Constant(Contract):
     _literal = field_validator('const')(check_literal)
 
 
+def operand_tag(value: Any) -> str | None:
+    """Choose exactly one operand form without adding a new serialized field."""
+    if isinstance(value, Reference):
+        return 'ref'
+    if isinstance(value, Constant):
+        return 'const'
+    if isinstance(value, Expression):
+        return 'op'
+    if isinstance(value, dict):
+        tags = [tag for tag in ('ref', 'const', 'op') if tag in value]
+        return tags[0] if len(tags) == 1 else None
+    return None
+
+
 class Expression(Contract):
     op: str = Field(min_length=1)
-    inputs: list[Union[Reference, Constant, 'Expression']] = Field(max_length=100)
+    inputs: list[Annotated[
+        Union[Annotated[Reference, Tag('ref')], Annotated[Constant, Tag('const')],
+              Annotated['Expression', Tag('op')]], Discriminator(operand_tag)
+    ]] = Field(max_length=100)
     params: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -159,6 +177,7 @@ class MechanismGrounding(Contract):
 class VisualSpec(Contract):
     # Unknown types are retained so Person 3 can resolve a deterministic fallback.
     type: str = Field(min_length=1)
+    id: str | None = Field(default=None, min_length=1)
     title: str | None = None
     value: str | None = None
     bindings: dict[str, str] = Field(default_factory=dict)
@@ -221,6 +240,30 @@ class InvariantSpec(Contract):
     assertion: AssertionSpec
 
 
+class GuidedStep(Contract):
+    target: str = Field(min_length=1)
+    instruction: str = Field(min_length=1)
+
+
+class AnnotationSpec(Contract):
+    target: str = Field(min_length=1)
+    kind: Literal['callout', 'hint', 'warning', 'insight']
+    text: str = Field(min_length=1)
+
+
+class ExperienceSpec(Contract):
+    story: Literal['equation_to_effect', 'input_to_output', 'build_step_by_step',
+                   'cause_and_effect', 'compare_cases', 'iterate_and_observe',
+                   'distribution_story', 'spatial_story'] | None = None
+    layout: Literal['visual_first', 'equation_first', 'controls_left', 'controls_right',
+                    'comparison', 'pipeline', 'focus', 'dashboard'] | None = None
+    hero_visual: str | None = None
+    calculation_order: list[str] = Field(default_factory=list, max_length=256)
+    emphasis_nodes: list[str] = Field(default_factory=list, max_length=256)
+    guided_mode: list[GuidedStep] = Field(default_factory=list, max_length=100)
+    annotations: list[AnnotationSpec] = Field(default_factory=list, max_length=100)
+
+
 class PaperMechanismIR(Contract):
     schema_version: Literal['1.0']
     teaching: TeachingSpec
@@ -235,6 +278,25 @@ class PaperMechanismIR(Contract):
     limitation: LimitationSpec
     tests: list[TestCaseSpec] = Field(default_factory=list, max_length=100)
     invariants: list[InvariantSpec] = Field(default_factory=list, max_length=100)
+    experience: ExperienceSpec | None = None
+    _experience_issues: list[dict[str, Any]] = PrivateAttr(default_factory=list)
+
+    @model_validator(mode='wrap')
+    @classmethod
+    def optional_experience_fallback(cls, data, handler):
+        """Malformed optional presentation data must not discard sound science."""
+        issues = list(data._experience_issues) if isinstance(data, cls) else []
+        if isinstance(data, dict) and data.get('experience') is not None:
+            try:
+                experience = ExperienceSpec.model_validate(data['experience'])
+                data = {**data, 'experience': experience}
+            except ValidationError as exc:
+                issues = [{'path': '.'.join(['experience', *map(str, e['loc'])]),
+                           'message': e['msg']} for e in exc.errors(include_input=False, include_context=False)]
+                data = {**data, 'experience': None}
+        value = handler(data)
+        value._experience_issues = issues
+        return value
 
 
 class ValidationFailure(Contract):
@@ -261,6 +323,9 @@ class DerivedPlayground(Contract):
     visible_nodes: set[str]
     resolved_visuals: list[Any] = Field(default_factory=list)
     rubric_summary: dict[str, Any] = Field(default_factory=dict)
+    validation: ValidationResult | None = None
+    visual_ids: list[str] = Field(default_factory=list)
+    resolved_experience: ExperienceSpec | None = None
 
 
 Expression.model_rebuild()
