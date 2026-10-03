@@ -36,7 +36,7 @@
   sourceText.append(el('h3',source.title || source.url || 'Source evidence'),el('p',source.authors || 'Evidence block IDs are provided below.'));
   if(source.section)sourceText.append(el('p',source.section));
   byId('source-card').append(sourceText);
-  const sourceBlocks=Array.isArray(source.blocks) ? source.blocks : [];
+  const sourceBlocks=Array.isArray(source.blocks) ? source.blocks : [], SOURCE_PREVIEW_CHARS=600;
   const evidenceIds=new Set((ir.evidence || []).flatMap(e=>e.blocks || []));
   sourceBlocks.filter(block=>evidenceIds.has(block.id)).forEach(block=>{
     const card=el('article',null,'source-excerpt');
@@ -45,7 +45,19 @@
       block.equation_number != null ? `Eq. ${block.equation_number}` : null,
       block.page != null ? `Page ${block.page}` : null].filter(Boolean).join(' · ');
     if(meta)card.append(el('p',meta,'evidence-ref'));
-    card.append(el('p',block.text || ''),el('small',`${block.type || 'Excerpt'} · ${block.id}`));
+    // Presentation only: show a short preview and keep the exact extracted
+    // text, artifacts included, behind a collapsed disclosure.
+    const full=String(block.text || ''), chars=Array.from(full);
+    if(chars.length > SOURCE_PREVIEW_CHARS) {
+      let cut=chars.slice(0,SOURCE_PREVIEW_CHARS).join('');
+      const space=cut.search(/\s\S*$/);
+      if(space > SOURCE_PREVIEW_CHARS-120)cut=cut.slice(0,space);
+      card.append(el('p',`${cut.trimEnd()} …`,'source-preview'));
+      const details=el('details',null,'source-full');
+      details.append(el('summary','View full extracted source'),el('p',full));
+      card.append(details);
+    } else card.append(el('p',full));
+    card.append(el('small',`${block.type || 'Excerpt'} · ${block.id}`));
     byId('source-excerpts').append(card);
   });
   if(source.url) { try { const url=new URL(source.url); if(['https:','http:'].includes(url.protocol)) { const a=el('a','Open paper ↗'); a.href=url.href; a.target='_blank'; a.rel='noopener noreferrer'; byId('source-card').append(a); } } catch (_) { /* Invalid URL stays inert. */ } }
