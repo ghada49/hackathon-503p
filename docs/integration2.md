@@ -10,25 +10,27 @@ The only merge conflict was `.gitignore`. Resolution preserves frontend asset/to
 exclusions and upstream environment/cache rules, including the public `.env.example`.
 The scientific runtime was identical in both branches and remains unchanged.
 
-The agent outputs validated scientific data, source blocks, and DerivedPlayground.
-Call Person 3's renderer after a successful agent run:
+The agent now performs source normalization, generation, scientific validation,
+derivation, rendering, and static artifact checking in one command:
 
 ```powershell
 python -m pip install -r requirements.txt
-python agent.py --input case.json --output out --model YOUR_MODEL_ID
-python -m playground.renderer --input out/derived_playground.json --source out/source_blocks.json --output out/index.html
+python agent.py --input case.json --output out --model deepseek/deepseek-v4.1-flash
 ```
 
-Person 1 generation uses the configured OpenRouter key and exact model ID. Rendering
-uses no model/API call. For source title/URL metadata, use the renderer's Python
-`source` dictionary documented in [the frontend handoff](person3-handoff.md).
+Successful runs create `out/index.html`. Source metadata is translated into
+`source.title`, `source.url`, and `source.blocks`. Existing `source_url` dictionaries
+are also supported by the standalone renderer adapter. Rendering uses no model/API
+call. Read the [submission verification report](submission-verification.md) for
+current tests and live-run results. The agent's process must have
+`OPENROUTER_API_KEY` configured for generation.
+
 Keep `playground/`, `runtime/`, and `templates/` together.
 
-Verification: the combined suite passed 238 tests and 334 subtests using Python
-3.11 with the pinned requirements. New cross-track tests exercise the actual agent
-with a mocked model response, scientific acceptance/derivation, and HTML rendering
-for valid, missing, and invalid shared experience. These tests incur no API calls.
-A live generated-paper run with paid model access was not performed.
+Current offline verification and live-run limitations are recorded in
+[submission verification](submission-verification.md). Cross-track regression
+and Chromium tests use mocked HTTP, with no paid model calls. The original merged
+suite passed 238 tests and 334 subtests before the one-command artifact checks.
 
 ```powershell
 python -m pip install pytest

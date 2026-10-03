@@ -62,10 +62,12 @@ def test_bad_input_still_flushes_trace_and_removes_stale_spec(tmp_path):
     output = tmp_path / 'out'
     output.mkdir()
     (output / 'spec.json').write_text('{}')
+    (output / 'index.html').write_text('stale page')
     path = tmp_path / 'bad.json'
     path.write_text('{}')
     assert run(path, output, 'model') != 0
     assert not (output / 'spec.json').exists()
+    assert not (output / 'index.html').exists()
     final = json.loads((output / 'trace.jsonl').read_text().splitlines()[-1])
     assert final['result']['success'] is False
 

@@ -33,7 +33,7 @@
   (ir.evidence || []).forEach(e => { const li=el('li',e.claim); li.append(el('span',`Evidence: ${(e.blocks || []).join(', ')}`, 'evidence-ref')); byId('evidence').append(li); });
   [...(ir.provenance?.simplifications || []),...(ir.provenance?.toy_examples || [])].forEach(s => byId('simplifications').append(el('li',s)));
   const source=payload.source || {}, sourceText=el('div');
-  sourceText.append(el('h3',source.title || 'Source evidence'),el('p',source.authors || 'Evidence block IDs are provided below.'));
+  sourceText.append(el('h3',source.title || source.url || 'Source evidence'),el('p',source.authors || 'Evidence block IDs are provided below.'));
   if(source.section)sourceText.append(el('p',source.section));
   byId('source-card').append(sourceText);
   const sourceBlocks=Array.isArray(source.blocks) ? source.blocks : [];

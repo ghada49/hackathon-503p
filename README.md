@@ -1,76 +1,135 @@
-# Interactive Explanation Renderer
+# Paper to Playground
 
-Person 3 integration module for Paper to Playground. Takes Person 2's validated
-IR / DerivedPlayground and Person 1's source metadata, and produces one offline,
-interactive HTML artifact. The renderer uses Python 3.11's standard library. No npm, backend,
-API key, CDN, or browser model call is required.
+Turn a supplied scientific paper excerpt into a grounded, interactive explanation.
+One agent command generates the scientific specification, validates its mechanism,
+and writes a standalone HTML playground with live controls and visualizations.
 
-`integration2` combines this renderer with Person 1's orchestration and Person 2's
-scientific runtime from `origin/integration`. Install `requirements.txt` for that
-upstream pipeline; its model generation requires `OPENROUTER_API_KEY`.
-The generated HTML remains independent of those Python dependencies and credentials.
+**Team:** Ghada Al Danab, Aya El Hajj, Joud Senan.
 
-```powershell
-python -m pip install -r requirements.txt
-python agent.py --input case.json --output out --model YOUR_MODEL_ID
-python -m playground.renderer --input out/derived_playground.json --source out/source_blocks.json --output out/index.html
-```
+**Development MODEL_ID:** `deepseek/deepseek-v4.1-flash`.
+The agent always uses the exact model passed through `--model`, including during
+repair; it never switches models silently. Live verification results are recorded
+in [submission verification](docs/submission-verification.md).
 
-Render after the agent exits successfully. The source-block JSON supplies excerpts;
-pass the `source` metadata dictionary shown below to also include paper title/URL.
-The merge does not change the agent's generation behavior or add model calls.
+## Setup and assessment command
 
-```python
-from playground.renderer import render_to_file
-
-render_to_file(
-    derived_playground,
-    "output/explanation.html",
-    source={
-        "title": paper_title,
-        "url": paper_url,
-        "blocks": [block.model_dump(mode="json") for block in source_blocks],
-    },
-)
-```
-
-Keep `playground/`, `runtime/`, and `templates/` together at the same repository
-root when integrating. Person 2 owns the shared models, validation, and scientific
-interpreter. Person 1 owns source ingestion, model calls, and orchestration.
-
-The adapter uses `resolved_experience`, `visual_ids`, `evaluated_defaults`, and
-`dependency_graph` from DerivedPlayground. Raw IR dictionaries and Pydantic models
-are also accepted. The official seven-field `IR.experience` is consumed directly;
-missing/invalid presentation uses the canonical artifact. Explicit `experience=`
-is an optional internal authoring override, not an upstream schema extension.
-
-CLI for an upstream-produced JSON file:
+Python 3.11 is required; Node/npm are needed only for development browser tests.
 
 ```powershell
-python -m playground.renderer --input path/to/validated-ir.json --output output/explanation.html
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+$env:OPENROUTER_API_KEY = "YOUR_LOCAL_KEY"
+.venv\Scripts\python.exe agent.py --input examples/cases/attention.json --output out --model deepseek/deepseek-v4.1-flash
 ```
 
-`--input` also accepts a JSON-mode DerivedPlayground dump. `--fixture` remains a
-compatibility alias. Optional flags: `--source`, `--values`, `--dependencies`,
-`--experience` (internal override), and `--evaluator` (trusted application JS only).
+For assessment, the required interface is:
 
-Read the [integration handoff](docs/person3-handoff.md),
-[experience contract](docs/experience-contract.md), and
-[runtime provenance](docs/science-runtime-provenance.md).
+```powershell
+python agent.py --input case.json --output out --model MODEL_ID
+```
 
-Fixtures, examples, test suites, browser tooling, and review/planning documents
-from Person 3 were removed from its integration distribution. Their verified snapshot remains
-at commit `8d0bbfdeeb7fc01a6eb3b132fee14c82fced610c`; restore it in a separate checkout
-when running the historical acceptance suite. Generated output and local tool
-caches are not distributed.
+On success, open `out/index.html`. No second renderer command is required.
+The exit code is zero only after scientific acceptance, successful derivation,
+HTML writing, and static artifact checks. Failed runs return nonzero, retain
+available diagnostics, and remove stale or partial `index.html`.
 
-Person 1/2 tests and scientific fixtures are included through the `integration`
-merge. Run the combined suite with `python -m pytest -q` after installing pytest.
+`OPENROUTER_API_KEY` must be in the process environment; the application does not
+implicitly read `.env`. Never commit credentials or pass them through case JSON.
 
-## Maintenance design instructions
+## Example input and output
 
-`AGENTS.md` records ownership and mandatory Apple design guidance. Restore the
-ignored skills if needed for future design work:
+[Attention case](examples/cases/attention.json) contains a short, attributed
+teaching paraphrase of Section 3.2.1 of
+[Attention Is All You Need](https://arxiv.org/html/1706.03762v7), rather than a
+runtime dependency on downloading the paper. Running the setup command produces
+`out/index.html` plus `spec.json`, `derived_playground.json`, `source_blocks.json`,
+`source_document.json`, `validation.json`, and `trace.jsonl`.
+
+[Bayesian odds](examples/cases/bayesian-odds.json) and
+[entropy](examples/cases/entropy.json) use clearly labeled, project-authored local
+teaching notes to exercise scientifically different mechanisms. They are not
+claimed to be excerpts from research papers. The browser tests generate example
+outputs in `out/browser/` using explicitly mocked model responses.
+
+The rendered page contains concept orientation, input controls, a primary figure,
+intermediate computations, What Changed, explorations, limitations, and grounding.
+The HTML embeds all code/data/styles, needs no API key or network, and recomputes
+using the fixed scientific interpreter rather than generated executable code.
+
+## Architecture and ownership
+
+| Track | Responsibility |
+| --- | --- |
+| Person 1 | Source normalization/retrieval, exact-model OpenRouter generation, bounded repair, budgets and trace |
+| Person 2 | Shared scientific schema, validation, Python/JavaScript evaluation, dependencies, tests and invariants |
+| Person 3 | Safe experience compilation, controls/figures, guidance, source presentation, self-contained HTML |
+
+The pipeline is `case -> source -> focused evidence -> generated IR -> scientific
+validation/repair -> DerivedPlayground -> HTML -> artifact checks`. Default limits
+include one generation plus at most one repair, 570 seconds, 30,000 completion
+tokens, and bounded HTTP attempts. Token usage, model IDs, latency, validation,
+rendering, artifact checks, and final status are written to the redacted JSONL trace.
+
+Scientific computations are declarative data interpreted by trusted code. Models
+cannot author HTML, CSS, JavaScript, or executable expressions. Optional shared
+ExperienceSpec selects presentation; missing/invalid choices fall back canonically.
+Keep `playground/`, `runtime/`, `templates/`, and `prompts/` together.
+
+The cheap artifact check verifies required mounts, embedded JSON and resource
+packaging. It does not execute JavaScript or establish paper fidelity. Chromium
+tests check the final pipeline's visible content, controls, visual updates, guides,
+source links, responsiveness, console errors, and absence of external requests.
+
+## Source delivery
+
+A case requires `source_url`, `focus`, and `audience`. It must also provide readable
+source content: e.g. `excerpt`, `source_text`, `content`, `paper_excerpt`, structured
+`source_blocks`, or a local text/HTML source. Genuine extra `paper_title`/`title`
+metadata is preserved. The frontend receives the real source URL and referenced
+blocks; missing metadata is not invented.
+
+URL-only input cannot be retrieved under an assessment network restriction that
+allows only OpenRouter. Development URL fetching is explicitly opt-in through
+`PAPER_PLAYGROUND_ALLOW_URL=1`; direct PDF extraction is not implemented. Confirm
+with the instructor: ?Will each assessment case include its focused excerpt or a
+local readable source, given that outbound access is restricted to OpenRouter??
+
+## Verification
+
+```powershell
+.venv\Scripts\python.exe -m pip install pytest
+.venv\Scripts\python.exe -m pytest -q
+npm.cmd ci
+npx.cmd playwright install chromium
+npm.cmd run test:browser
+```
+
+Browser tests generate pages by the actual agent CLI entry point with mocked HTTP
+responses; they incur no model costs. Live API results are labeled separately in
+the verification report. Person 3's older extensive frontend suite remains at
+`8d0bbfdeeb7fc01a6eb3b132fee14c82fced610c` in Git history.
+
+## Reuse and credits
+
+- Scientific interpreter/schema are team-authored Person 2 code, pinned at
+  `e2de90d6a61d84e9add864d1866891f4444e1ddb`; see
+  [runtime provenance](docs/science-runtime-provenance.md).
+- Runtime dependencies: [Requests](https://requests.readthedocs.io/),
+  [Pydantic](https://docs.pydantic.dev/), [NumPy](https://numpy.org/), and
+  [Beautiful Soup](https://www.crummy.com/software/BeautifulSoup/).
+  Development tests use [pytest](https://docs.pytest.org/) and
+  [Playwright](https://playwright.dev/).
+- Design guidance: [Emil Kowalski Apple design](https://www.ui-skills.com/skills/emilkowalski/apple-design)
+  and [Apple HIG design skill](https://github.com/dickwu/apple-design-skill).
+  User-supplied reference images inspired the ivory/forest-green palette. Those
+  images are not bundled assets; typography uses local/system fonts and diagrams
+  use trusted inline SVG. AI coding assistance was used in development.
+
+Integration details: [frontend handoff](docs/person3-handoff.md),
+[experience contract](docs/experience-contract.md),
+[combined branch notes](docs/integration2.md).
+
+Restore ignored design skills for future design work:
 
 ```powershell
 git clone --depth 1 https://github.com/dickwu/apple-design-skill.git .agents/skills/apple-hig

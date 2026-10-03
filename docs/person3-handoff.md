@@ -33,8 +33,11 @@ The current Attention page is one demonstration of the shared compiler.
 | Person 3 | Safe presentation compilation, control widgets, figures, guidance, change explanations, responsive design, HTML packaging |
 
 No OpenRouter integration or runtime model call was added. The LLM's structured
-output is consumed by the frontend after upstream validation. The full Person 1
-generation pipeline is not yet connected; end-to-end generated-paper integration remains upstream work.
+output is consumed by the frontend after upstream validation. On `integration2`, the Person 1 pipeline now invokes rendering after successful
+scientific validation/derivation, then runs static artifact checks before reporting
+success. The assessment agent command creates `index.html` directly. Rendering
+adds no model call; live generation verification is reported separately in
+[submission verification](submission-verification.md).
 
 ## 2. Exact renderer interface
 
@@ -344,6 +347,7 @@ containing template markers are not interpreted as additional template instructi
 | Files | Purpose |
 | --- | --- |
 | `playground/renderer.py` | Adapter and standalone HTML packaging |
+| `playground/artifact.py` | Static final-artifact checks, invoked by the agent |
 | `playground/experience.py` | Shared presentation contract and internal compilation |
 | `runtime/computation.js` | Exact pinned Person 2 scientific interpreter |
 | `runtime/playground-runtime.js` | Controls, evaluation lifecycle, grounding, changes |
@@ -391,8 +395,8 @@ consumed; absent/invalid experience uses the canonical artifact.
 
 Person 1 should call `render_to_file(derived_playground, output, source=metadata)`
 after Person 2 validation, including source-block dictionaries. Runtime revision
-and dependency direction are pinned above. A real generated-paper end-to-end case
-remains to be run by the integrated pipeline. The shared ExperienceSpec is adopted;
+and dependency direction are pinned above. The integrated agent handles this handoff automatically; see the verification
+report for live-run status. The shared ExperienceSpec is adopted;
 rich local presentation options remain internal rather than additional schema fields.
 
 Current limits: existing v1.0 types/operators, mostly scalar/vector/matrix numeric

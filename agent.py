@@ -14,9 +14,11 @@ from playground.generator import (GenerationFailure, OpenRouterClient, apply_res
 from playground.retrieval import DEFAULT_CONTEXT_CHARS, select_source_context
 from playground.source import load_case, normalize_source, resolve_source
 from playground.trace import TraceLogger
+from playground.renderer import render_to_file
+from playground.artifact import validate_artifact
 
 _OUTPUTS = ('spec.json', 'source_blocks.json', 'source_document.json', 'trace.jsonl',
-            'validation.json', 'derived_playground.json', 'candidate.json')
+            'validation.json', 'derived_playground.json', 'candidate.json', 'index.html')
 
 
 def prepare_output_dir(path: str | Path) -> Path:
@@ -46,6 +48,7 @@ def run(input_path: str | Path, output_path: str | Path, model: str, *,
     success = False
     reason = None
     output = None
+    scientific = False
     try:
         case = load_case(input_path)
         output = prepare_output_dir(output_path)
@@ -101,18 +104,40 @@ def run(input_path: str | Path, output_path: str | Path, model: str, *,
             if budget.remaining_seconds <= 0:
                 budget.check_available()
             success = True
+        metadata = dict(url=case.source_url, blocks=[b.model_dump(mode='json') for b in blocks])
+        title = document.title or next((value for value in
+            (getattr(case, 'paper_title', None), getattr(case, 'title', None))
+            if isinstance(value, str) and value.strip()), None)
+        if title:
+            metadata['title'] = title
         _write_json(output / 'source_blocks.json', dict(source_url=case.source_url, focus=case.focus,
-                    audience=case.audience, blocks=[b.model_dump(mode='json') for b in blocks]))
+                    audience=case.audience, **metadata))
         _write_json(output / 'source_document.json', document.model_dump(mode='json'))
         if hasattr(spec, 'model_dump'):
             _write_json(output / 'spec.json', spec.model_dump(mode='json'))
             trace.log('output', 'write_ir', dict(schema_valid=True, scientific_acceptance=success if scientific else None, artifact='spec.json'))
         elif spec is not None:
             _write_json(output / 'candidate.json', spec)
+        if scientific and success:
+            if result.derived is None:
+                raise ValueError('Accepted scientific candidate has no executable derivation')
+            budget.check_available()
+            try:
+                render_to_file(result.derived, output / 'index.html', source=metadata)
+                trace.log('artifact', 'render_html', dict(success=True, artifact='index.html'))
+                checks = validate_artifact(output / 'index.html')
+                trace.log('artifact', 'validate_html', dict(success=True, **checks))
+                budget.check_available()
+            except Exception:
+                trace.log('artifact', 'failed', dict(success=False, artifact='index.html'))
+                raise
         if not success:
             print(f'Generation failed: {trace.sanitize(reason)}', file=sys.stderr)
     except Exception as exc:
         success = False
+        if scientific and output is not None:
+            # A partial or rejected page must never survive as this run's artifact.
+            (output / 'index.html').unlink(missing_ok=True)
         # Error text may include source/credentials; redact known secrets before stderr.
         if isinstance(exc, ValidationError):
             # Pydantic's printable exception includes raw input dictionaries.

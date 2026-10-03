@@ -65,8 +65,11 @@ def render(ir: Any, evaluated_values: dict | None = None, *,
     # Strip the uncompiled extension: invalid presentation data must not prevent
     # serializing the independently usable scientific IR (e.g. NaN in a threshold).
     science = {key: value for key, value in spec.items() if key != "experience"}
+    source = dict(source or {})
+    if not source.get("url") and source.get("source_url"):
+        source["url"] = source["source_url"]
     payload = safe_json({"ir": science, "values": evaluated_values or {},
-                         "source": source or {}, "experience": presentation,
+                         "source": source, "experience": presentation,
                          "dependencies": dependency_graph, "visual_ids": visual_ids})
     replacements = {
         "TITLE": html.escape(spec.get("teaching", {}).get("title", "Learn and explore")),
