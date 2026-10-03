@@ -6,15 +6,15 @@ badges, landing-page heroes, or separate Learn/Explore/Source destinations.
 The first viewport must show a compact concept title, concise orientation,
 at least one meaningful control, and the primary visual. Keep controls adjacent
 to results. Follow concept → mechanism → computation → consequence → explorations
-→ limitations → source grounding. Browser checks enforce this on desktop/mobile.
+→ limitations → source grounding. Historical browser checks enforce this on desktop/mobile.
 
 Work on `feature/frontend-visuals`. The frontend owns `playground/renderer.py`,
-`playground/visuals.py`, `templates/`, and the UI in `runtime/playground-runtime.js`.
+`runtime/visuals.js`, `templates/`, and the UI in `runtime/playground-runtime.js`.
 Keep the science evaluator and agent/source contracts independent.
 
 Person 3 also owns `playground/experience.py` and `runtime/experience-runtime.js`:
 the optional educational experience compiler. Preserve the frozen v1.0 science
-fixtures. Validate only presentation choices/references here, keep mandatory
+fixtures in the verified Git snapshot. Validate only presentation choices/references here, keep mandatory
 semantic sections, and fall back to the canonical layout on invalid experience
 data. The canonical fallback must also use the artifact layout. Never accept
 model-authored HTML, CSS, JavaScript, or expressions. See

@@ -54,10 +54,8 @@ remain in either mode. Stories and layouts compile to trusted components.
 
 Everything below describes the richer **internal** grammar accepted by explicit
 `render(..., experience=local_plan)` / CLI `--experience`. Do not put these extra
-fields inside shared `PaperMechanismIR.experience`. Local sidecars in
-`examples/experiences` exercise this implementation; they are not upstream schema
-examples. No new model call or scientific evaluator is introduced here. The three
-supplied scientific fixtures remain byte-identical.
+fields inside shared `PaperMechanismIR.experience`. Development sidecars in the historical verified commit exercise this
+implementation; they are not upstream schema examples and are not distributed. No new model call or scientific evaluator is introduced here. The supplied scientific fixtures were preserved byte-identically in that snapshot.
 
 ## Composition paths
 

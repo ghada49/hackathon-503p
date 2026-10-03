@@ -3,8 +3,11 @@
 Prepared 2026-10-03 for `feature/frontend-visuals`.
 
 This handoff describes the implementation shared on `feature/frontend-visuals`.
-Generated HTML, screenshots, and the temporary Person 2 checkout are ignored in
-`out/`. Pull this branch to obtain the implementation. It has not been merged to main.
+This branch now contains the integration distribution: renderer, runtimes, templates,
+and integration documentation. Development fixtures, examples, tests, generated
+output, and browser tooling are retained in Git history at
+`8d0bbfdeeb7fc01a6eb3b132fee14c82fced610c`, rather than shipped here.
+Pull this branch to obtain the implementation. It has not been merged to main.
 
 ## 1. Deliverable and ownership
 
@@ -26,7 +29,7 @@ The current Attention page is one demonstration of the shared compiler.
 
 No OpenRouter integration or runtime model call was added. The LLM's structured
 output is consumed by the frontend after upstream validation. The full Person 1
-generation pipeline is not yet connected; current previews use fixtures.
+generation pipeline is not yet connected; end-to-end generated-paper integration remains upstream work.
 
 ## 2. Exact renderer interface
 
@@ -157,7 +160,8 @@ emit only the seven fields below inside that block. Rich trees and compatibility
 fields are Person-3-internal and are accepted only through the explicit
 `experience=` override (including CLI `--experience`), not from upstream IR.
 The compiler removes the presentation block before scientific browser evaluation.
-The three supplied science fixtures are preserved byte-for-byte.
+The three supplied science fixtures were preserved byte-for-byte in the verified
+development snapshot; this distribution does not bundle them.
 
 ## 5. Final shared ExperienceSpec
 
@@ -330,74 +334,61 @@ Titles are HTML-escaped and DOM text is assigned with `textContent`. Embedded JS
 escapes script-terminating characters and rejects nonfinite numbers. User strings
 containing template markers are not interpreted as additional template instructions.
 
-## 11. Files and tests
+## 11. Integration files and verification history
 
 | Files | Purpose |
 | --- | --- |
-| `playground/renderer.py` | Integration adapter and standalone HTML packaging |
-| `playground/experience.py` | Bounded presentation normalization/validation |
-| `playground/visuals.py` | Python visual fallback selection helper |
-| `runtime/computation.js` | Unchanged Person 2 evaluator |
+| `playground/renderer.py` | Adapter and standalone HTML packaging |
+| `playground/experience.py` | Shared presentation contract and internal compilation |
+| `runtime/computation.js` | Exact pinned Person 2 scientific interpreter |
 | `runtime/playground-runtime.js` | Controls, evaluation lifecycle, grounding, changes |
 | `runtime/experience-runtime.js` | Compositions, comparisons, annotations, guide |
-| `runtime/visuals.js` | Trusted tables/charts/graphs/scenes and visual recovery |
+| `runtime/visuals.js` | Trusted figures, charts, graphs, scenes, visual recovery |
 | `templates/learn_explore.html` | Mandatory artifact shell |
-| `templates/artifact.css`, `experience.css`, `notebook.css` | Shared/responsive/reference styling |
-| `examples/experiences/*.json` | Eight declarative example compositions |
-| `tests/fixtures/*_ir.json` | Shared and synthetic mechanism cases |
-| `tests/test_renderer.py`, `test_experience.py` | Packaging, safety, compiler tests |
-| `tests/browser/frontend.spec.js` | Development-only Playwright acceptance |
-| `tests/make_presentation_fixtures.py` | Authors synthetic IR data; does not evaluate AST |
-| `tests/verify_science_integration.py` | Imports final upstream validation/evaluation for eight-fixture parity and derived-artifact checks |
-| `README.md`, `docs/`, `AGENTS.md` | Integration, design, provenance, ownership |
-| `package*.json`, `playwright.config.js`, `.gitignore`, `.gitattributes` | Development tooling, ignored artifacts, exact-byte runtime/fixture preservation |
+| `templates/artifact.css`, `experience.css`, `notebook.css` | Required shared/responsive styling |
+| `README.md`, `docs/` | Integration interfaces and runtime provenance |
+| `AGENTS.md`, `.gitignore`, `.gitattributes` | Ownership/maintenance guidance and repository settings |
 
-Most recent verification: 24 frontend Python tests and 27 browser tests passed.
-Coverage includes offline opening/no external requests/errors, live edits to two
-inputs across all eight mechanisms, distinct dependency paths, error recovery,
-guidance, comparisons, source injection/types, visual recovery, and responsive
-accessibility. All three shared fixtures have canonical/directed first-viewport
-checks at 1280x800, 390x844, and 320x800.
+Keep `playground/`, `runtime/`, and `templates/` together at the same root. Python
+loads the template/style/runtime files from that root; these are required assets,
+not generated output. No production dependencies are installed by this module.
+The unused Python visual selection helper was removed; actual visual selection
+and recovery run in the retained trusted browser components.
 
-Mechanisms exercised: Attention, entropy, Bayesian odds updating, repeated
+The verified development snapshot is commit
+`8d0bbfdeeb7fc01a6eb3b132fee14c82fced610c`. Before cleanup it passed 24 frontend
+Python tests, 27 browser tests, and all 48 final Person 2 tests. Eight mechanisms
+passed upstream validation with explicitly synthetic structural source metadata;
+35 default/test/exploration states matched Python/JS within `1e-10`.
+
+Those checks covered Attention, entropy, Bayesian odds updating, repeated
 contraction, piecewise clipping, two-state transition, neighbor aggregation, and
-a system recurrence. The five additional cases are synthetic frontend fixtures.
-The three supplied scientific fixtures remain byte-identical to the user's zip.
+system recurrence. They included official shared ExperienceSpec, canonical
+missing/invalid fallback, controls updating values/figures, What Changed,
+Guide Me, offline behavior with no external requests/console errors, and
+responsive accessibility. This does not establish real-paper fidelity.
+Development fixtures/tests/tooling were intentionally removed from the integration
+distribution; use that historical commit in a separate checkout to repeat the
+full suite. The production cleanup was smoke-checked separately with generated
+artifacts and the pinned runtime.
 
-Final integration additionally exercises the official shared contract on all eight
-mechanisms, canonical missing/invalid fallback, canonical guide targets, and stable
-visual IDs without external requests or console errors.
-
-Upstream checks: all 48 Person 2 runtime tests passed in an ignored branch export.
-All eight IRs passed its validator with explicitly synthetic structural source
-metadata; all 35 default/test/exploration states matched Python/JS within 1e-10.
-This does not establish real paper fidelity. See [runtime provenance](science-runtime-provenance.md).
-
-## 12. Commands and remaining integration
+## 12. Integration commands and remaining work
 
 ```powershell
-python -m playground.renderer --fixture tests/fixtures/attention_ir.json --experience examples/experiences/attention.json --output out/index.html
-python -m unittest discover -s tests -p "test_*.py"
-npm.cmd install
-npx.cmd playwright install chromium
-npm.cmd run test:browser
-# After exporting the pinned Person 2 checkout to out/science-final:
-python tests/verify_science_integration.py --reference out/science-final
-Push-Location out/science-final
-python -m unittest discover -s tests -v
-Pop-Location
+python -m playground.renderer --input path/to/validated-ir.json --output output/explanation.html
 ```
 
-Renderer CLI also accepts `--values`, `--source`, `--dependencies`, and a trusted
-`--evaluator` file. Omit `--experience` to consume the official IR experience;
-canonical fallback applies when that block is absent or invalid.
-Node/Playwright are development-only; generated HTML needs neither.
+The JSON input may be a validated IR or a JSON-mode DerivedPlayground dump.
+`--fixture` remains an alias for `--input`; there is no bundled/default fixture.
+Optional flags: `--values`, `--source`, `--dependencies`, trusted `--evaluator`,
+and internal `--experience`. Without the override, official IR ExperienceSpec is
+consumed; absent/invalid experience uses the canonical artifact.
 
-To finish team integration, Person 1 should pass its validated generated IR and
-source metadata to this renderer. Person 2 should confirm the runtime revision
-and dependency format. The optional shared experience field is now adopted; internal sidecars remain
-frontend authoring examples. Add a real generated-paper
-end-to-end case after connecting those upstream components.
+Person 1 should call `render_to_file(derived_playground, output, source=metadata)`
+after Person 2 validation, including source-block dictionaries. Runtime revision
+and dependency direction are pinned above. A real generated-paper end-to-end case
+remains to be run by the integrated pipeline. The shared ExperienceSpec is adopted;
+rich local presentation options remain internal rather than additional schema fields.
 
 Current limits: existing v1.0 types/operators, mostly scalar/vector/matrix numeric
 figures, fixed editor shapes, plain-text source equations/tables, and trusted

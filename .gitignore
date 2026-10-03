@@ -2,6 +2,7 @@
 __pycache__/
 *.pyc
 out/
+output/
 node_modules/
 test-results/
 debug.log

@@ -95,8 +95,9 @@ def render_to_file(ir: Any, output: str | Path, **kwargs: Any) -> Path:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Preview the frontend with a fixture")
-    parser.add_argument("--fixture", default="tests/fixtures/attention_ir.json")
+    parser = argparse.ArgumentParser(description="Render validated IR or DerivedPlayground as standalone HTML")
+    parser.add_argument("--input", "--fixture", dest="input", required=True,
+                        help="JSON file containing validated IR or DerivedPlayground")
     parser.add_argument("--output", default="out/index.html")
     parser.add_argument("--values", help="JSON file of evaluated values from Person 2")
     parser.add_argument("--evaluator", help="Trusted JS file implementing PlaygroundEvaluator")
@@ -104,7 +105,7 @@ def main() -> None:
     parser.add_argument("--source", help="Optional source metadata/SourceBlock JSON")
     parser.add_argument("--dependencies", help="Optional Person 2 transitive dependency graph JSON")
     args = parser.parse_args()
-    fixture = json.loads(Path(args.fixture).read_text(encoding="utf-8"))
+    fixture = json.loads(Path(args.input).read_text(encoding="utf-8"))
     evaluator = Path(args.evaluator).read_text(encoding="utf-8") if args.evaluator else None
     values = json.loads(Path(args.values).read_text(encoding="utf-8")) if args.values else None
     experience = json.loads(Path(args.experience).read_text(encoding="utf-8")) if args.experience else None

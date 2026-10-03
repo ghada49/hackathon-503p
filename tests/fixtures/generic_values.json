@@ -1,7 +1,0 @@
-{
-  "prior_odds": 0.42857142857142855,
-  "posterior_odds": 1.2857142857142858,
-  "posterior": 0.5625,
-  "posterior_complement": 0.4375,
-  "posterior_distribution": [0.5625, 0.4375]
-}

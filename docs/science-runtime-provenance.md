@@ -16,7 +16,8 @@ renderer accepts this graph explicitly or through `DerivedPlayground`; otherwise
 the trusted runtime derives it. UI highlighting intersects descendants with values
 that actually changed. Guide dependency outlines are a separate presentation state.
 
-Verification on 2026-10-03:
+Historical verification on 2026-10-03 (development snapshot
+`8d0bbfdeeb7fc01a6eb3b132fee14c82fced610c`):
 
 - Exported the upstream branch to ignored `out/science-final` for testing.
 - All 48 upstream runtime tests passed, including known answers, failure cases,
@@ -27,7 +28,7 @@ Verification on 2026-10-03:
   Python and JavaScript values within 1e-10.
 - Generated all eight mechanisms through final `derive_playground`, including
   valid, missing, and invalid shared ExperienceSpec; checked resolved fallback and
-  dependency graph agreement. Reproduce with
+  dependency graph agreement. Reproduce from that snapshot with
   `python tests/verify_science_integration.py --reference out/science-final`.
 - Installed test environment: CPython 3.11.9, Node 24.11.1, Pydantic 2.12.5,
   NumPy 2.4.2. Upstream pinned
@@ -39,3 +40,6 @@ sources remains with Persons 1 and 2.
 
 Updates must copy the science team's file intact and repeat its conformance tests;
 do not repair scientific behavior in the frontend.
+
+The integration distribution omits development tests, fixtures, and temporary
+checkouts. They remain available in the verified historical commit.
