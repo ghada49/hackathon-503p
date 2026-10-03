@@ -113,6 +113,22 @@ def test_invalid_reference_triggers_one_authoritative_repair(make_client, ir):
     assert {request['model'] for request in http.payloads} == {'same/frozen-model'}
 
 
+def test_external_interface_rejection_preserves_best_and_is_traced(make_client, ir):
+    ir['computation']['nodes'][0]['op'] = 'ref'
+    renamed = copy.deepcopy(ir['computation'])
+    renamed['nodes'][0]['id'] = 'renamed'
+    client, http = make_client(json.dumps(ir), patch('computation', renamed))
+    result = compile(client)
+    assert not result.accepted and result.repair_attempted
+    assert result.spec.model_dump()['computation'] == models.PaperMechanismIR.model_validate(ir).model_dump()['computation']
+    assert result.spec.teaching.model_dump() == ir['teaching']
+    assert result.spec.evidence[0].model_dump() == ir['evidence'][0]
+    assert len(http.payloads) == 2
+    client.trace.flush()
+    events = [json.loads(line) for line in Path(client.trace._file.name).read_text().splitlines()]
+    assert any(event['action'] == 'interface_rejected' for event in events)
+
+
 @pytest.mark.parametrize('operand', [{}, {'ref': 'prior', 'const': 1}, {'op': 'add', 'inputs': [{}]}])
 def test_final_operand_diagnostics_and_actual_paths(make_client, ir, operand):
     ir['computation']['nodes'][0]['inputs'][0] = operand
@@ -127,6 +143,8 @@ def test_final_operand_diagnostics_and_actual_paths(make_client, ir, operand):
 
 def test_dead_control_scopes_are_person2_scopes(make_client, ir):
     ir['controls'].append(dict(id='unused', type='slider', label='Unused', value_kind='scalar', default=1, min=0, max=2))
+    # A scientific test depends on this control: optional pruning is unsafe.
+    ir['tests'][0]['inputs']['unused'] = 1
     report = validation.validate_spec(ir, context().blocks)
     expected = sorted({path for f in report.failures if f.repairable for path in f.allowed_paths})
     client, http = make_client(json.dumps(ir), '{"updates":[]}')
@@ -137,6 +155,54 @@ def test_dead_control_scopes_are_person2_scopes(make_client, ir):
     assert 'controls.2' in expected and any(path.startswith('computation.nodes.') for path in expected)
     assert any(path.startswith('visuals.') for path in expected)
     assert not any(path.startswith(('teaching', 'evidence', 'tests')) for path in expected)
+
+
+@pytest.mark.parametrize('extra', ['control', 'exploration'])
+def test_safe_extra_cleanup_avoids_semantic_repair(make_client, ir, extra):
+    if extra == 'control':
+        ir['controls'].append(dict(id='unused', type='slider', label='Unused', value_kind='scalar', default=1, min=0, max=2))
+    else:
+        e = copy.deepcopy(ir['explorations'][0])
+        e['title'] = 'Extra invalid exploration'
+        e['expectation']['expected'] = 100
+        ir['explorations'].append(e)
+    client, http = make_client(json.dumps(ir))
+    result = compile(client)
+    assert result.accepted and result.status == 'FULL_SUCCESS'
+    assert not result.repair_attempted
+    assert len(http.payloads) == 1
+    assert len(result.resolution['strict_reports']) == 2
+
+
+def test_partial_cli_artifact_is_honest_when_quality_minimum_fails(tmp_path, monkeypatch, ir):
+    monkeypatch.setenv('OPENROUTER_API_KEY', 'offline-integration-key')
+    ir['explorations'][1] = copy.deepcopy(ir['explorations'][0])
+    ir['explorations'][1]['title'] = 'Same interaction'
+    input_path = tmp_path / 'case.json'
+    input_path.write_text(json.dumps({**case().model_dump(), 'excerpt': context().blocks[0].text}))
+    output = tmp_path / 'out'
+    http = HTTP(json.dumps(ir), '{"updates":[]}')
+    assert run(input_path, output, 'same-model', session=http) == 1
+    assert len(http.payloads) == 2
+    payload = json.loads(http.payloads[1]['messages'][1]['content'])
+    assert payload['allowed_paths'] == ['explorations.1']
+    assert (output / 'derived_playground.json').exists()
+    assert json.loads((output / 'validation.json').read_text())['ok'] is True
+    assert json.loads((output / 'resolution.json').read_text())['status'] == 'USABLE_PARTIAL'
+    assert json.loads((output / 'trace.jsonl').read_text().splitlines()[-1])['result']['success'] is False
+
+
+def test_usable_partial_repair_replaces_unusable_original(make_client, ir):
+    good_computation = copy.deepcopy(ir['computation'])
+    ir['computation']['nodes'][0]['op'] = 'ref'
+    ir['controls'][1]['min'] = ir['controls'][1]['max'] = ir['controls'][1]['default']
+    client, http = make_client(json.dumps(ir), patch('computation', good_computation))
+    result = compile(client)
+    assert not result.accepted and result.status == 'USABLE_PARTIAL'
+    assert result.derived is not None
+    assert result.spec.computation.nodes[0].op == good_computation['nodes'][0]['op']
+    assert not result.validation.ok
+    assert len(http.payloads) == 2
 
 
 @pytest.mark.parametrize('repair', ['malformed', '{"updates":[{"path":"teaching.title","value":"tampered"}]}', '{"updates":[]}'])

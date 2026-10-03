@@ -8,7 +8,7 @@ from pydantic import ValidationError
 
 from playground.budget import BudgetExceeded, call_with_timeout
 from playground.generator import (BestSoFar, GenerationFailure, OpenRouterError,
-    apply_restricted_patch, generate_spec, initial_missing_schema_version, repair_spec)
+    apply_restricted_patch, generate_spec, initial_missing_schema_version, operand_grammar_locations, repair_spec)
 from playground.models import PaperMechanismIR, SourceBlock, ValidationResult, DerivedPlayground
 from playground.validation import validate_spec, derive_playground
 
@@ -34,6 +34,11 @@ class CompilationResult:
     accepted: bool
     repair_attempted: bool = False
     reason: str | None = None
+    resolution: dict | None = None
+
+    @property
+    def status(self):
+        return self.resolution['status'] if self.resolution else 'FULL_SUCCESS' if self.accepted else 'UNUSABLE'
 
 
 def assess_candidate(candidate, source_blocks, *, trace=None, budget=None) -> Assessment:
@@ -67,6 +72,9 @@ def assess_candidate(candidate, source_blocks, *, trace=None, budget=None) -> As
     report = invoke(lambda: validate_spec(spec, source, trace=event))
     if budget is not None:
         budget.check_available()
+    locations = operand_grammar_locations(spec)
+    if locations:
+        event('generation', 'operand_grammar', dict(locations=locations, authoritative_acceptance=report.ok))
     try:
         # This report belongs to these exact immutable snapshots. There is no cross-call cache.
         derived = invoke(lambda: derive_playground(spec, source, validation=report))
@@ -77,6 +85,12 @@ def assess_candidate(candidate, source_blocks, *, trace=None, budget=None) -> As
     if budget is not None:
         budget.check_available()
     return Assessment(spec, report, derived)
+
+
+def resolve_candidate(candidate, source_blocks, *, trace=None, budget=None):
+    from playground.resolution import resolve_assessment
+    assessment = assess_candidate(candidate, source_blocks, trace=trace, budget=budget)
+    return resolve_assessment(assessment, source_blocks, assess=assess_candidate, trace=trace, budget=budget)
 
 
 def compile_scientific_spec(client, evidence, case, *, operations=None, max_prompt_chars=None) -> CompilationResult:
@@ -90,23 +104,28 @@ def compile_scientific_spec(client, evidence, case, *, operations=None, max_prom
         parse_failure = exc
         original = exc.candidate
     try:
-        assessment = assess_candidate(original if original is not None else {}, evidence.blocks,
-                                      trace=client.trace, budget=client.budget)
+        resolved = resolve_candidate(original if original is not None else {}, evidence.blocks,
+                                     trace=client.trace, budget=client.budget)
+        assessment = resolved.assessment
     except BudgetExceeded as exc:
         return CompilationResult(copy.deepcopy(original), None, None, False, reason=str(exc))
     best = BestSoFar(assessment.spec if assessment.spec is not None else original, assessment.validation)
     best_derived = copy.deepcopy(assessment.derived)
+    best_resolution = copy.deepcopy(resolved.metadata())
+    # Cleanup may shift list indices; diagnostics and patching use this same new snapshot.
+    original = assessment.spec if assessment.spec is not None else original
 
     def retained(reason, *, attempted=False):
         return CompilationResult(copy.deepcopy(best.spec), copy.deepcopy(best.validation),
-                                 copy.deepcopy(best_derived), False, attempted, reason)
+                                 copy.deepcopy(best_derived), False, attempted, reason, copy.deepcopy(best_resolution))
 
-    if assessment.accepted:
+    if resolved.accepted:
         client.trace.log('science', 'accepted', dict(validation_ok=True, frozen_sha=PERSON2_FROZEN_SHA))
-        return CompilationResult(best.spec, best.validation, best_derived, True)
-    failures = [failure.model_dump(mode='json') for failure in assessment.validation.failures]
+        return CompilationResult(best.spec, best.validation, best_derived, True, resolution=best_resolution)
+    failures = [failure.model_dump(mode='json') for failure in assessment.validation.failures] + resolved.repair_requests
     allowed = sorted({path for failure in assessment.validation.failures if failure.repairable
                       for path in failure.allowed_paths})
+    allowed = sorted(set(allowed) | {path for request in resolved.repair_requests for path in request['allowed_paths']})
     empty_candidate = original is None
     if empty_candidate and parse_failure is not None:
         failures = copy.deepcopy(parse_failure.failures)
@@ -121,7 +140,7 @@ def compile_scientific_spec(client, evidence, case, *, operations=None, max_prom
                     client.trace.log('repair', 'initial_version_scope', dict(expected_version='1.0'))
     if not allowed:
         client.trace.log('repair', 'repair_skipped', dict(reason='no_authorized_scientific_paths'))
-        return retained('Scientific/schema validation failed; no authorized repair paths')
+        return retained('Scientific/schema or rubric quality requirements remain unmet; no authorized repair paths')
     before_calls = client.budget.repairs
     try:
         client.budget.check_available()
@@ -134,15 +153,25 @@ def compile_scientific_spec(client, evidence, case, *, operations=None, max_prom
             allow_initial_missing_version=not empty_candidate and 'schema_version' in allowed and
                 initial_missing_schema_version(raw, PaperMechanismIR.model_json_schema()), ir_model=PaperMechanismIR)
         # Every changed candidate gets schema validation, a NEW scientific report, and new derivation.
-        repaired = assess_candidate(candidate, evidence.blocks, trace=client.trace, budget=client.budget)
-        if repaired.accepted:
+        repaired_resolution = resolve_candidate(candidate, evidence.blocks, trace=client.trace, budget=client.budget)
+        repaired = repaired_resolution.assessment
+        if repaired_resolution.accepted:
             best.consider(repaired.spec, repaired.validation, accepted=True)
             best_derived = copy.deepcopy(repaired.derived)
             client.trace.log('repair', 'accepted', dict(validation_ok=True, validation_reused_within_assessment=True))
-            return CompilationResult(best.spec, best.validation, best_derived, True, True)
-        client.trace.log('repair', 'rejected', dict(validation_ok=False,
+            return CompilationResult(best.spec, best.validation, best_derived, True, True,
+                                     resolution=repaired_resolution.metadata())
+        # A usable partial is retained only as an improvement over an unusable original.
+        if best_resolution['status'] == 'UNUSABLE' and repaired_resolution.status == 'USABLE_PARTIAL':
+            best = BestSoFar(repaired.spec, repaired.validation)
+            best_derived = copy.deepcopy(repaired.derived)
+            best_resolution = copy.deepcopy(repaired_resolution.metadata())
+            client.trace.log('repair', 'partial_retained', dict(status='USABLE_PARTIAL', scientific_acceptance=False))
+        client.trace.log('repair', 'rejected', dict(validation_ok=repaired.validation.ok, status=repaired_resolution.status,
             failures=[failure.model_dump(mode='json') for failure in repaired.validation.failures], best_preserved=True))
-        return retained('Repaired candidate failed scientific/schema validation', attempted=True)
+        return retained('Repaired candidate failed scientific/schema or rubric quality requirements', attempted=True)
     except (GenerationFailure, OpenRouterError, BudgetExceeded, ValidationError) as exc:
+        if isinstance(exc, GenerationFailure) and any(f.get('check') == 'repair_interface' for f in exc.failures):
+            client.trace.log('repair', 'interface_rejected', dict(failures=exc.failures, best_preserved=True))
         client.trace.log('repair', 'rejected', dict(error_type=type(exc).__name__, reason=str(exc), best_preserved=True))
         return retained('Repair failed: ' + str(exc), attempted=client.budget.repairs > before_calls)
