@@ -6,6 +6,9 @@ and writes a standalone HTML playground with live controls and visualizations.
 
 **Team:** Ghada Al Danab, Aya El Hajj, Joud Senan.
 
+`integration3` combines the Person 3 frontend on `integration2` with the hardened
+Person 1/2 `integration` branch. See [merge and verification notes](docs/integration3.md).
+
 **Development MODEL_ID:** `deepseek/deepseek-v4.1-flash`.
 The agent always uses the exact model passed through `--model`, including during
 repair; it never switches models silently. Live verification results are recorded
@@ -43,7 +46,7 @@ teaching paraphrase of Section 3.2.1 of
 [Attention Is All You Need](https://arxiv.org/html/1706.03762v7), rather than a
 runtime dependency on downloading the paper. Running the setup command produces
 `out/index.html` plus `spec.json`, `derived_playground.json`, `source_blocks.json`,
-`source_document.json`, `validation.json`, and `trace.jsonl`.
+`source_document.json`, `validation.json`, `resolution.json`, and `trace.jsonl`.
 
 [Bayesian odds](examples/cases/bayesian-odds.json) and
 [entropy](examples/cases/entropy.json) use clearly labeled, project-authored local

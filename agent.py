@@ -18,7 +18,8 @@ from playground.renderer import render_to_file
 from playground.artifact import validate_artifact
 
 _OUTPUTS = ('spec.json', 'source_blocks.json', 'source_document.json', 'trace.jsonl',
-            'validation.json', 'derived_playground.json', 'candidate.json', 'index.html')
+            'validation.json', 'derived_playground.json', 'candidate.json',
+            'resolution.json', 'index.html')
 
 
 def prepare_output_dir(path: str | Path) -> Path:
@@ -78,6 +79,8 @@ def run(input_path: str | Path, output_path: str | Path, model: str, *,
             spec = result.spec
             success = result.accepted
             reason = result.reason
+            if result.resolution is not None:
+                _write_json(output / 'resolution.json', result.resolution)
             if result.validation is not None:
                 _write_json(output / 'validation.json', result.validation.model_dump(mode='json'))
             if result.derived is not None:

@@ -47,7 +47,12 @@ def render(ir: Any, evaluated_values: dict | None = None, *,
             # the raw spec still contains a structurally invalid experience.
             resolved = True
             resolved_experience = spec["resolved_experience"]
-        spec = _mapping(spec["spec"])
+        resolved_visuals = spec.get("resolved_visuals")
+        spec = dict(_mapping(spec["spec"]))
+        if resolved_visuals:
+            # Recovery resolves presentation against this list and its parallel
+            # visual_ids; the scientific spec and its validation stay unchanged.
+            spec["visuals"] = resolved_visuals
     if evaluated_values is not None and hasattr(evaluated_values, "model_dump"):
         evaluated_values = evaluated_values.model_dump(mode="json")
     if isinstance(evaluated_values, dict) and "evaluated_defaults" in evaluated_values:

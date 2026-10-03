@@ -16,7 +16,7 @@ from pydantic import ValidationError
 from playground.budget import BudgetExceeded, BudgetManager, MAX_HTTP_ATTEMPTS_PER_SEMANTIC_CALL, call_with_timeout
 from playground.trace import TraceLogger
 from playground.retrieval import DEFAULT_CONTEXT_CHARS, source_context_payload
-from playground.computation import OPERATIONS
+from playground.computation import OPERATIONS, LOCAL_NAMES
 
 ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions'
 PROMPTS = Path(__file__).resolve().parent.parent / 'prompts'
@@ -408,6 +408,70 @@ def _repair_schema(candidate: dict, allowed_paths: list[str], schema: dict) -> d
     return dict(fields=fields, **({'$defs': definitions} if definitions else {}))
 
 
+def _computation_node_ids(candidate) -> set[str]:
+    computation = candidate.get('computation') if isinstance(candidate, dict) else None
+    nodes = computation.get('nodes') if isinstance(computation, dict) else None
+    return {node['id'] for node in nodes if isinstance(node, dict) and isinstance(node.get('id'), str)} if isinstance(nodes, list) else set()
+
+
+def protected_external_references(candidate, allowed_paths: list[str]) -> dict[str, list[str]]:
+    """Frozen-schema reference locations outside repair scope; no scientific inference."""
+    original = _plain(candidate)
+    node_ids = _computation_node_ids(original) - LOCAL_NAMES
+    reference_paths = (
+        r'computation\.outputs\.\d+',
+        r'computation\.nodes\.\d+\.(?:(?:inputs\.\d+|params\.body)\.)*(?:ref|params\.end_ref)',
+        r'mechanism_grounding\.\d+\.nodes\.\d+',
+        r'visuals\.\d+\.(?:value|bindings\..+)',
+        r'explorations\.\d+\.expectation\.value',
+        r'tests\.\d+\.assertions\.\d+\.value',
+        r'invariants\.\d+\.(?:value|assertion\.value)',
+        r'experience\.(?:calculation_order|emphasis_nodes)\.\d+',
+        r'experience\.(?:guided_mode|annotations)\.\d+\.target',
+    )
+    references = {}
+
+    def visit(value, path):
+        if any(path == allowed or path.startswith(allowed + '.') for allowed in allowed_paths):
+            return
+        if isinstance(value, dict):
+            for key, child in value.items():
+                visit(child, path + '.' + str(key) if path else str(key))
+        elif isinstance(value, list):
+            for i, child in enumerate(value):
+                visit(child, path + '.' + str(i))
+        elif isinstance(value, str) and value in node_ids and any(re.fullmatch(pattern, path) for pattern in reference_paths):
+            references.setdefault(value, []).append(path)
+
+    visit(original, '')
+    return {node: sorted(paths) for node, paths in sorted(references.items())}
+
+
+def operand_grammar_locations(candidate) -> list[dict]:
+    """Locate operand tags used as op names; acceptance remains Person 2's decision."""
+    original = _plain(candidate)
+    computation = original.get('computation') if isinstance(original, dict) else None
+    nodes = computation.get('nodes') if isinstance(computation, dict) else None
+    locations = []
+
+    def visit(expression, path):
+        if not isinstance(expression, dict):
+            return
+        op = expression.get('op')
+        if isinstance(op, str) and op in {'ref', 'const'} and op not in OPERATIONS:
+            locations.append(dict(path=path + '.op', operation=op))
+        inputs = expression.get('inputs')
+        for i, child in enumerate(inputs if isinstance(inputs, list) else []):
+            visit(child, path + '.inputs.' + str(i))
+        params = expression.get('params')
+        if isinstance(params, dict) and 'body' in params:
+            visit(params['body'], path + '.params.body')
+
+    for i, node in enumerate(nodes if isinstance(nodes, list) else []):
+        visit(node, 'computation.nodes.' + str(i))
+    return locations
+
+
 def build_repair_context(candidate, failures, allowed_paths: list[str], focus_context=None,
                          remaining_budget=None, *, case=None, ir_model=None, operations=None,
                          allow_full_regeneration: bool = False, max_prompt_chars: int | None = None) -> list[dict]:
@@ -443,6 +507,7 @@ def build_repair_context(candidate, failures, allowed_paths: list[str], focus_co
         if any(path.split('.')[0] == root for path in allowed_paths):
             payload.update({key: registry[key] for key in keys})
     if any(path.split('.')[0] == 'computation' for path in allowed_paths):
+        payload['protected_external_references'] = protected_external_references(original, allowed_paths)
         controls = original.get('controls')
         computation = original.get('computation')
         nodes = computation.get('nodes') if isinstance(computation, dict) else None
@@ -633,6 +698,14 @@ def apply_restricted_patch(existing_spec, patch: dict, allowed_paths: list[str],
             raise GenerationFailure('Repair modified a protected field', allowed_paths=[])
     if allow_initial_missing_version and candidate.get('schema_version') != '1.0':
         raise GenerationFailure('Repair did not supply the authoritative schema version', allowed_paths=[])
+    if any(path.split('.')[0] == 'computation' for path in allowed_paths):
+        references = protected_external_references(original, allowed_paths)
+        missing = sorted(set(references) - _computation_node_ids(candidate))
+        if missing:
+            message = 'Repair removed protected externally referenced computation IDs: ' + ', '.join(missing)
+            raise GenerationFailure(message, failures=[dict(check='repair_interface', severity='serious',
+                path='computation', message=message, repairable=False, allowed_paths=[],
+                protected_external_references={node: references[node] for node in missing})], allowed_paths=[])
     _json(candidate)
     return candidate
 

@@ -8,7 +8,7 @@ at least one meaningful control, and the primary visual. Keep controls adjacent
 to results. Follow concept → mechanism → computation → consequence → explorations
 → limitations → source grounding. Historical browser checks enforce this on desktop/mobile.
 
-Work on `integration2` for combined integration. Person 3's original branch is
+Work on `integration3` for combined integration. Person 3's original branch is
 `feature/frontend-visuals`. The frontend owns `playground/renderer.py`,
 `runtime/visuals.js`, `templates/`, and the UI in `runtime/playground-runtime.js`.
 Keep the science evaluator and agent/source contracts independent.

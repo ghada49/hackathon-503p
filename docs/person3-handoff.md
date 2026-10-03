@@ -9,6 +9,11 @@ output, and browser tooling are retained in Git history at
 `8d0bbfdeeb7fc01a6eb3b132fee14c82fced610c`, rather than shipped here.
 Pull this branch to obtain the implementation. It has not been merged to main.
 
+`integration3` additionally merges Person 1/2's hardened `integration` commit
+`42c1275958bf2ee3ff032871e1668ed10f416c8f`. See the
+[integration3 notes](integration3.md) for the resolved presentation adapter and
+combined verification results.
+
 The combined branch `integration2` merges this distribution with Person 1/2's
 `integration` branch. Their scientific fixtures, tests, requirements, and pipeline
 are present there. The removal descriptions below refer to Person 3's original
@@ -73,8 +78,12 @@ object the renderer extracts `spec`, `evaluated_defaults`, `dependency_graph`,
 is authoritative canonical fallback even if the raw spec retains an invalid block.
 Explicit keyword arguments take precedence over derived values/graph.
 
-`visible_nodes`, `resolved_visuals`, and `rubric_summary` are not consumed as
-separate rendering directives in the current adapter. Displayed calculations
+On `integration3`, a nonempty `resolved_visuals` list supplies the recovered
+presentation figures and is paired with the authoritative `visual_ids` and
+`resolved_experience`. An empty list from the frozen derivation retains original
+IR figures. This presentation adaptation does not mutate the scientific spec.
+`visible_nodes` and `rubric_summary` are not separate rendering directives.
+Displayed calculations
 come from the IR's `display` flags plus calculation-story selections, and browser
 components resolve visuals from `spec.visuals`.
 

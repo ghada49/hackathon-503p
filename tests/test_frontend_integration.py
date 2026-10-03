@@ -75,7 +75,8 @@ def test_artifact_failure_cannot_report_success_or_keep_stale_html(tmp_path, mon
     derived = derive_playground(spec, source)
     monkeypatch.setattr('playground.orchestration.compile_scientific_spec', lambda *args, **kwargs:
         SimpleNamespace(spec=derived.spec, accepted=True, reason=None, validation=derived.validation,
-                        derived=None if failure == 'missing_derived' else derived))
+                        derived=None if failure == 'missing_derived' else derived,
+                        resolution={'status': 'FULL_SUCCESS'}))
 
     def fail(*args, **kwargs):
         # Exercise cleanup even if rendering produced a partial file.
@@ -95,5 +96,68 @@ def test_artifact_failure_cannot_report_success_or_keep_stale_html(tmp_path, mon
     assert run(case, output, 'integration/test-model') == 1
     assert not (output / 'index.html').exists()
     assert (output / 'validation.json').exists()
+    events = [json.loads(line) for line in (output / 'trace.jsonl').read_text().splitlines()]
+    assert events[-1]['result']['success'] is False
+
+
+def test_renderer_honors_recovery_visuals_and_ids_without_mutating_science(tmp_path):
+    import copy
+    import re
+    from playground.orchestration import resolve_candidate
+    from playground.models import SourceBlock
+    from playground.renderer import render
+    spec = json.loads((Path(__file__).parent / 'fixtures/generic_ir.json').read_text())
+    spec['visuals'] = [{'id': 'belief_view', 'type': 'unsupported', 'value': 'posterior_distribution'}]
+    spec['experience'] = {'hero_visual': 'belief_view', 'layout': 'controls_left',
+        'guided_mode': [{'target': 'belief_view', 'instruction': 'Inspect the belief.'}]}
+    ids = {b for item in spec['evidence'] + spec['mechanism_grounding'] for b in item['blocks']}
+    source = [SourceBlock(id=b, type='paragraph', text='Posterior odds combine prior odds and evidence.', order=i)
+              for i, b in enumerate(sorted(ids))]
+    recovered = resolve_candidate(spec, source)
+    assert recovered.status == 'FULL_SUCCESS'
+    derived = recovered.assessment.derived
+    original = copy.deepcopy(derived.model_dump(mode='json'))
+    page = render(derived)
+    data = json.loads(re.search(r'<script type="application/json" id="playground-data">(.*?)</script>', page, re.S).group(1))
+    assert data['experience']['mode'] == 'directed'
+    assert data['visual_ids'] == ['belief_view']
+    assert data['ir']['visuals'][0]['type'] == 'bar_chart'
+    assert derived.model_dump(mode='json') == original
+
+
+def test_frozen_derivation_without_recovery_visuals_keeps_original_figures():
+    from playground.validation import derive_playground
+    from playground.renderer import render
+    spec = json.loads((Path(__file__).parent / 'fixtures/generic_ir.json').read_text())
+    spec['experience'] = {'hero_visual': 'visual_2'}
+    derived = derive_playground(spec)
+    assert not derived.resolved_visuals
+    assert '"mode": "directed"' in render(derived)
+
+
+def test_partial_recovery_retains_diagnostics_without_reporting_full_success(tmp_path, monkeypatch):
+    from playground.orchestration import resolve_candidate, CompilationResult
+    from playground.models import SourceBlock
+    spec = json.loads((Path(__file__).parent / 'fixtures/generic_ir.json').read_text())
+    spec['explorations'] = spec['explorations'][:1]
+    ids = {b for item in spec['evidence'] + spec['mechanism_grounding'] for b in item['blocks']}
+    source = [SourceBlock(id=b, type='paragraph', text='Posterior odds combine prior odds and evidence.', order=i)
+              for i, b in enumerate(sorted(ids))]
+    resolution = resolve_candidate(spec, source)
+    assert resolution.status == 'USABLE_PARTIAL'
+    assessment = resolution.assessment
+    monkeypatch.setattr('playground.orchestration.compile_scientific_spec', lambda *args, **kwargs:
+        CompilationResult(assessment.spec, assessment.validation, assessment.derived, False,
+                          reason='Partial quality requirements', resolution=resolution.metadata()))
+    case = tmp_path / 'case.json'
+    case.write_text(json.dumps({'source_url': 'paper', 'focus': 'odds', 'audience': 'students',
+        'excerpt': 'Posterior odds combine prior odds and evidence.'}))
+    output = tmp_path / 'output'
+    output.mkdir()
+    (output / 'index.html').write_text('stale success')
+    assert run(case, output, 'integration/test-model') == 1
+    assert json.loads((output / 'resolution.json').read_text())['status'] == 'USABLE_PARTIAL'
+    assert (output / 'derived_playground.json').is_file()
+    assert not (output / 'index.html').exists()
     events = [json.loads(line) for line in (output / 'trace.jsonl').read_text().splitlines()]
     assert events[-1]['result']['success'] is False
